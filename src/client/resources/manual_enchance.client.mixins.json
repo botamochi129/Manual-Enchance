@@ -5,7 +5,15 @@
   "compatibilityLevel": "JAVA_17",
   "client": [
     "InGameHudMixin",
-    "RenderDrivingOverlayMixin"
+    "RenderDrivingOverlayMixin",
+    "DynamicTrainModelMixin",
+    "TrainClientMixin",
+    "ICustomResourcesMixin",
+    "RenderConditionMixin",
+    "ResourcePackCreatorPropertiesMixin",
+    "ResourcePackCreatorPropertiesAccessor",
+    "TrainPropertiesMixin",
+    "CustomResourcesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

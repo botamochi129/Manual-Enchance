@@ -128,7 +128,7 @@ public class InGameHudMixin {
         // ==========================================
         // InGameHudMixin などの中で
         int railIndex = train.getIndex(accessor.manualEnchance$getRailProgress(), true);
-        drawTIMS(client, matrices, (client.getWindow().getScaledWidth() / 2) - 30, client.getWindow().getScaledHeight() - 60, train, railIndex);
+        drawTIMS(client, matrices, (client.getWindow().getScaledWidth() / 2) - 30, client.getWindow().getScaledHeight() - 60, train, railIndex, accessor);
     }
 
     @Unique
@@ -197,7 +197,7 @@ public class InGameHudMixin {
     }
 
     @Unique
-    private void drawTIMS(MinecraftClient client, MatrixStack matrices, int x, int y, TrainClient train, int railIndex) {
+    private void drawTIMS(MinecraftClient client, MatrixStack matrices, int x, int y, TrainClient train, int railIndex, TrainAccessor accessor) {
         // --- レイアウト設定 ---
         int timsY = y - 40;
         int width = 165; // 秒表示が増えるので少し幅を広げる
@@ -251,5 +251,9 @@ public class InGameHudMixin {
         boolean isClosed = train.getDoorValue() == 0;
         String doorKey = isClosed ? "gui.manual_enchance.tims.door_closed" : "gui.manual_enchance.tims.door_open";
         client.textRenderer.draw(matrices, I18n.translate(doorKey), x + 5, timsY + 61, isClosed ? 0xFF00FF00 : 0xFFFF5555);
+
+        String[] pantoNames = {"DOWN", "5.0m", "W51", "6.0m"};
+        int pantoState = accessor.getPantographState();
+        client.textRenderer.draw(matrices, "PANTO: " + pantoNames[pantoState], x + 90, timsY + 46, 0xFFFFFFFF);
     }
 }

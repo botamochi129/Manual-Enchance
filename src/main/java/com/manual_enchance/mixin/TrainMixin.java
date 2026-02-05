@@ -1,12 +1,16 @@
 package com.manual_enchance.mixin;
 
+import com.google.gson.JsonObject;
+import com.manual_enchance.Manual_enchance;
 import com.manual_enchance.util.TrainAccessor;
+import mtr.client.CustomResources;
 import mtr.data.Depot;
 import mtr.data.Train;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -35,6 +39,9 @@ public abstract class TrainMixin implements TrainAccessor {
 
     // 1:前進(F), 0:中立(N), -1:後進(B)
     private int reverser = 1;
+
+    @Unique
+    private int pantographState = 0;
 
     @Overwrite
     public boolean changeManualSpeed(boolean isAccelerate) {
@@ -84,6 +91,15 @@ public abstract class TrainMixin implements TrainAccessor {
     }
 
     @Override
+    public int getPantographState() { return pantographState; }
+
+    @Override
+    public void setPantographState(int state) {
+        // 0~3の範囲に収める
+        this.pantographState = state % 4;
+    }
+
+    @Override
     public void setManualNotchDirect(int notch) {
         // 範囲制限をかけて代入
         this.manualNotch = Math.max(-9, Math.min(5, notch));
@@ -92,6 +108,20 @@ public abstract class TrainMixin implements TrainAccessor {
         if (this.manualNotch > 0 && this.isInsideDepot) {
             this.hasLeftDepot = true;
         }
+    }
+
+    @Override
+    public String getHornSoundId() {
+        mtr.data.Train self = (mtr.data.Train)(Object)this;
+        if (self.trainId == null) return "";
+
+        // Mapをループして、自分の trainId に含まれるキーワードを探す
+        for (java.util.Map.Entry<String, String> entry : com.manual_enchance.Manual_enchance.HORN_MAP.entrySet()) {
+            if (self.trainId.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return "";
     }
 
     /**

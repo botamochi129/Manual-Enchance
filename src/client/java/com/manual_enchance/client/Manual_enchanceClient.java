@@ -2,6 +2,7 @@ package com.manual_enchance.client;
 
 import com.manual_enchance.Manual_enchance;
 import com.manual_enchance.util.TrainAccessor;
+import mtr.data.TrainClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -10,8 +11,12 @@ import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.datafixer.fix.EntityMinecartIdentifiersFix;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.nio.FloatBuffer;
@@ -26,6 +31,9 @@ public class Manual_enchanceClient implements ClientModInitializer {
 
     private boolean lastButton2Pressed = false;
     private boolean lastButton3Pressed = false;
+
+    private static KeyBinding pantoKey;
+    private static KeyBinding keyHorn;
 
     @Override
     public void onInitializeClient() {
@@ -42,20 +50,63 @@ public class Manual_enchanceClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_BACKSLASH,
                 "category.manual_enchance"));
 
-        // --- 毎ティック入力を監視 ---
+        pantoKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.manual_enchance.panto",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_P,
+                "category.manual_enchance"
+        ));
+
+        keyHorn = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.manual_enchance.horn",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_RIGHT_SHIFT,
+                "category.manual_enchance"
+        ));
+
+        // まとめた形の例（onInitializeClient内）
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
 
-            // 1. キーボード監視
-            while (keyReverserUp.wasPressed()) {
-                sendReverserPacket(true);
-            }
-            while (keyReverserDown.wasPressed()) {
-                sendReverserPacket(false);
+            // 1. リバーサー操作
+            while (keyReverserUp.wasPressed()) sendReverserPacket(true);
+            while (keyReverserDown.wasPressed()) sendReverserPacket(false);
+
+            // 2. パンタグラフ操作
+            while (pantoKey.wasPressed()) {
+                for (mtr.data.TrainClient tc : mtr.client.ClientData.TRAINS) {
+                    if (tc.isPlayerRiding(client.player) && tc.isHoldingKey(client.player)) {
+                        TrainAccessor acc = (TrainAccessor) tc;
+                        int next = (acc.getPantographState() + 1) % 4;
+                        acc.setPantographState(next);
+
+                        // --- ここにパケット送信を追加 ---
+                        PacketByteBuf buf = PacketByteBufs.create();
+                        buf.writeLong(tc.id);   // 列車のID
+                        buf.writeInt(next);     // 新しい状態(0-3)
+                        ClientPlayNetworking.send(Manual_enchance.PANTO_UPDATE_PACKET, buf);
+                        // ----------------------------
+
+                        String[] names = {"DOWN", "5.0m", "W51", "6.0m"};
+                        client.player.sendMessage(Text.literal("§b[Pantograph] §f" + names[next]), true);
+                        break;
+                    }
+                }
             }
 
-            // 2. ジョイスティック（マスコン）監視
-            // GLFW_JOYSTICK_1 (0番) を優先的にチェック
+            // 3. 警笛
+            while (keyHorn.wasPressed()) {
+                for (mtr.data.TrainClient tc : mtr.client.ClientData.TRAINS) {
+                    if (tc.isPlayerRiding(client.player) && tc.isHoldingKey(client.player)) {
+                        PacketByteBuf buf = PacketByteBufs.create();
+                        buf.writeLong(tc.id);
+                        ClientPlayNetworking.send(Manual_enchance.HORN_PACKET_ID, buf);
+                        break;
+                    }
+                }
+            }
+
+            // 3. ジョイスティック監視
             if (GLFW.glfwJoystickPresent(GLFW.GLFW_JOYSTICK_1)) {
                 pollJoystick(client);
             }
@@ -70,6 +121,60 @@ public class Manual_enchanceClient implements ClientModInitializer {
                     if (tc.id == trainId) {
                         if (tc instanceof TrainAccessor accessor) {
                             accessor.setReverser(reverserValue);
+                        }
+                        break;
+                    }
+                }
+            });
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(Manual_enchance.PANTO_UPDATE_PACKET, (client, handler, buf, responseSender) -> {
+            long trainId = buf.readLong();
+            int newState = buf.readInt();
+
+            client.execute(() -> {
+                // ClientData内の全列車からIDが一致するものを探す
+                mtr.client.ClientData.TRAINS.forEach(train -> {
+                    if (train.id == trainId) {
+                        ((TrainAccessor) train).setPantographState(newState);
+                    }
+                });
+            });
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(Manual_enchance.HORN_PACKET_ID, (client, handler, buf, responseSender) -> {
+            long trainId = buf.readLong();
+            System.out.println("Received Horn Packet for ID: " + trainId);
+            client.execute(() -> {
+                if (client.world == null) return;
+
+                for (mtr.data.TrainClient tc : mtr.client.ClientData.TRAINS) {
+                    if (tc.id == trainId) {
+                        String soundId = ((TrainAccessor) tc).getHornSoundId();
+
+                        if (soundId != null && !soundId.isEmpty()) {
+                            // --- 座標取得の修正 ---
+                            // tc.vehicleRidingClient.getViewOffset() はプレイヤーの視点オフセットなので、
+                            // 列車の絶対座標を取得するには、もっとも簡単な方法として
+                            // プレイヤーが乗っているならその位置、そうでないなら 0両目の位置などを使用します。
+
+                            // MTRの内部で使われている Vec3 座標を利用（例として先頭車両の座標）
+                            // simulateTrain等で計算された直後の座標が取れない場合があるため、
+                            // 安全に取得できる方法として、クライアントプレイヤーの位置を基準にするか、
+                            // tcから直接座標を取得できるフィールドを探します。
+
+                            // MTR 3.x では、tc自体が位置を保持するフィールドが制限されているため、
+                            // 最も確実なのは「列車の中心点」または「先頭車」の座標です。
+                            // 簡易的にプレイヤーの座標で鳴らすか、tcの内部的な位置計算を利用します。
+
+                            client.world.playSound(
+                                    client.player.getX(), // 暫定的にプレイヤー位置。
+                                    client.player.getY(), // 本来は列車の座標を送るのがベストです。
+                                    client.player.getZ(),
+                                    new SoundEvent(new Identifier(soundId)),
+                                    SoundCategory.BLOCKS,
+                                    1.0F, 1.0F, false
+                            );
                         }
                         break;
                     }

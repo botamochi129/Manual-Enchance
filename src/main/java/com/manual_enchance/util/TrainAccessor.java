@@ -15,4 +15,9 @@ public interface TrainAccessor {
     int getNextStoppingIndex();
     List<Double> manualEnchance$getDistances();
     double manualEnchance$getRailProgress();
+
+    int getPantographState();
+    void setPantographState(int state);
+
+    String getHornSoundId();
 }
