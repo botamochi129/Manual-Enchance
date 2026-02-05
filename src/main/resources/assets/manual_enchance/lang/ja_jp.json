@@ -1,0 +1,11 @@
+{
+  "gui.manual_enchance.tims.next": "次駅: %s",
+  "gui.manual_enchance.tims.dest": "行先: %s",
+  "gui.manual_enchance.tims.status.stopped": "● 停車中",
+  "gui.manual_enchance.tims.status.running": "▶ 走行中",
+  "gui.manual_enchance.tims.door_closed": "● 戸閉",
+  "gui.manual_enchance.tims.door_open": "○ 進行不可",
+  "category.manual_enchance": "Manual Enchanceキー設定",
+  "key.manual_enchance.reverser_down":  "リバーサー下げ",
+  "key.manual_enchance.reverser_up": "リバーサー上げ"
+}

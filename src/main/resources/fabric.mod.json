@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "manual_enchance",
+  "version": "${version}",
+  "name": "Manual Enchance",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/manual_enchance/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "com.manual_enchance.client.Manual_enchanceClient"
+    ],
+    "main": [
+      "com.manual_enchance.Manual_enchance"
+    ]
+  },
+  "mixins": [
+    "manual_enchance.mixins.json",
+    {
+      "config": "manual_enchance.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

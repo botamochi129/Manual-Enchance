@@ -1,0 +1,11 @@
+{
+  "gui.manual_enchance.tims.next": "Next: %s",
+  "gui.manual_enchance.tims.dest": "Destination: %s",
+  "gui.manual_enchance.tims.status.stopped": "● Stopped",
+  "gui.manual_enchance.tims.status.running": "▶ Running",
+  "gui.manual_enchance.tims.door_closed": "● Doors Closed",
+  "gui.manual_enchance.tims.door_open": "○ Doors Open",
+  "category.manual_enchance": "Manual Enchance Key Setting",
+  "key.manual_enchance.reverser_down":  "Reverser Down",
+  "key.manual_enchance.reverser_up": "Reverser Up"
+}
