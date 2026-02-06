@@ -8,12 +8,12 @@
     "RenderDrivingOverlayMixin",
     "DynamicTrainModelMixin",
     "TrainClientMixin",
-    "ICustomResourcesMixin",
     "RenderConditionMixin",
     "ResourcePackCreatorPropertiesMixin",
     "ResourcePackCreatorPropertiesAccessor",
     "TrainPropertiesMixin",
-    "CustomResourcesMixin"
+    "CustomResourcesMixin",
+    "ICustomResourcesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

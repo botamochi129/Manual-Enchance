@@ -9,6 +9,7 @@
   "key.manual_enchance.reverser_down":  "リバーサー下げ",
   "key.manual_enchance.reverser_up": "リバーサー上げ",
   "key.manual_enchance.panto": "パンタグラフ切り替え",
+  "key.manual_enchance.horn": "警笛",
   "gui.mtr.part_render_condition_pantagraph_down": "描画方式: パンタグラフ下降",
   "gui.mtr.part_render_condition_pantagraph_5m": "描画方式: パンタグラフ5M",
   "gui.mtr.part_render_condition_pantagraph_w51": "描画方式: パンタグラフW51",

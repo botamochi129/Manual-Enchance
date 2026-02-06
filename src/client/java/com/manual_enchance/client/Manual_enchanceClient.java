@@ -144,7 +144,7 @@ public class Manual_enchanceClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(Manual_enchance.HORN_PACKET_ID, (client, handler, buf, responseSender) -> {
             long trainId = buf.readLong();
-            System.out.println("Received Horn Packet for ID: " + trainId);
+            //System.out.println("Received Horn Packet for ID: " + trainId);
             client.execute(() -> {
                 if (client.world == null) return;
 
@@ -153,23 +153,10 @@ public class Manual_enchanceClient implements ClientModInitializer {
                         String soundId = ((TrainAccessor) tc).getHornSoundId();
 
                         if (soundId != null && !soundId.isEmpty()) {
-                            // --- 座標取得の修正 ---
-                            // tc.vehicleRidingClient.getViewOffset() はプレイヤーの視点オフセットなので、
-                            // 列車の絶対座標を取得するには、もっとも簡単な方法として
-                            // プレイヤーが乗っているならその位置、そうでないなら 0両目の位置などを使用します。
-
-                            // MTRの内部で使われている Vec3 座標を利用（例として先頭車両の座標）
-                            // simulateTrain等で計算された直後の座標が取れない場合があるため、
-                            // 安全に取得できる方法として、クライアントプレイヤーの位置を基準にするか、
-                            // tcから直接座標を取得できるフィールドを探します。
-
-                            // MTR 3.x では、tc自体が位置を保持するフィールドが制限されているため、
-                            // 最も確実なのは「列車の中心点」または「先頭車」の座標です。
-                            // 簡易的にプレイヤーの座標で鳴らすか、tcの内部的な位置計算を利用します。
-
+                            // 暫定でプレイヤー位置
                             client.world.playSound(
-                                    client.player.getX(), // 暫定的にプレイヤー位置。
-                                    client.player.getY(), // 本来は列車の座標を送るのがベストです。
+                                    client.player.getX(),
+                                    client.player.getY(),
                                     client.player.getZ(),
                                     new SoundEvent(new Identifier(soundId)),
                                     SoundCategory.BLOCKS,

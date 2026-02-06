@@ -212,7 +212,7 @@ public abstract class TrainMixin implements TrainAccessor {
         }
 
         // デバッグ
-        if (this.manualNotch <= -1 && ticksElapsed > 0 && !world.isClient && world.getTime() % 20 == 0) {
+        /*if (this.manualNotch <= -1 && ticksElapsed > 0 && !world.isClient && world.getTime() % 20 == 0) {
             System.out.println(String.format(
                     "[TrainDebug-SERVER] Notch:%d Speed:%.4f→%.4f Delta:%.4f",
                     this.manualNotch,
@@ -220,7 +220,7 @@ public abstract class TrainMixin implements TrainAccessor {
                     this.nextManualSpeed,
                     this.nextManualSpeed - this.speed
             ));
-        }
+        }*/
 
         // 停止判定
         if (this.distances != null && !this.distances.isEmpty()
