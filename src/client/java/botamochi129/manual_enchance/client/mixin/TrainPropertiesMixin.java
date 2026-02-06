@@ -1,6 +1,6 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
-import com.manual_enchance.util.TrainPropertiesAccessor;
+import botamochi129.manual_enchance.util.TrainPropertiesAccessor;
 import mtr.client.TrainProperties;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;

@@ -1,13 +1,11 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
 import com.google.gson.JsonObject;
-import com.manual_enchance.client.util.PantoHelper;
-import com.manual_enchance.util.TrainAccessor;
+import botamochi129.manual_enchance.client.util.PantoHelper;
+import botamochi129.manual_enchance.util.TrainAccessor;
 import mtr.client.DynamicTrainModel;
 import mtr.data.TrainClient;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;

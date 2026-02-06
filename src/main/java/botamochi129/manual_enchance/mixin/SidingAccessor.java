@@ -1,4 +1,4 @@
-package com.manual_enchance.mixin;
+package botamochi129.manual_enchance.mixin;
 
 import mtr.data.Siding;
 import mtr.data.TrainServer;

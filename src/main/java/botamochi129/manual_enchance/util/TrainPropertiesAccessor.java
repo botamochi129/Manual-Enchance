@@ -1,4 +1,4 @@
-package com.manual_enchance.util;
+package botamochi129.manual_enchance.util;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;

@@ -1,6 +1,6 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
-import com.manual_enchance.client.util.PantoHelper;
+import botamochi129.manual_enchance.client.util.PantoHelper;
 import mtr.data.TrainClient;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;

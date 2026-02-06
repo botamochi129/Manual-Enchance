@@ -1,8 +1,7 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
-import com.manual_enchance.util.TrainAccessor;
+import botamochi129.manual_enchance.util.TrainAccessor;
 import mtr.data.*;
-import mtr.path.PathData;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawableHelper;
 import net.minecraft.client.gui.hud.InGameHud;
@@ -13,8 +12,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.util.List;
 
 @Mixin(InGameHud.class)
 public class InGameHudMixin {

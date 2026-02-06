@@ -1,4 +1,4 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
 import mtr.render.RenderDrivingOverlay;
 import net.minecraft.client.util.math.MatrixStack;

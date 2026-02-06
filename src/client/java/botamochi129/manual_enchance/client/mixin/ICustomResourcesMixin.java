@@ -1,15 +1,12 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.manual_enchance.Manual_enchance;
+import botamochi129.manual_enchance.Manual_enchance;
 import mtr.client.ICustomResources;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.util.function.Consumer;
 
 @Mixin(value = ICustomResources.class, remap = false)
 public interface ICustomResourcesMixin {

@@ -4,16 +4,16 @@
   "package": "com.manual_enchance.client.mixin",
   "compatibilityLevel": "JAVA_17",
   "client": [
-    "InGameHudMixin",
-    "RenderDrivingOverlayMixin",
-    "DynamicTrainModelMixin",
-    "TrainClientMixin",
-    "RenderConditionMixin",
-    "ResourcePackCreatorPropertiesMixin",
-    "ResourcePackCreatorPropertiesAccessor",
-    "TrainPropertiesMixin",
-    "CustomResourcesMixin",
-    "ICustomResourcesMixin"
+    "botamochi129.manual_enchance.client.mixin.InGameHudMixin",
+    "botamochi129.manual_enchance.client.mixin.RenderDrivingOverlayMixin",
+    "botamochi129.manual_enchance.client.mixin.DynamicTrainModelMixin",
+    "botamochi129.manual_enchance.client.mixin.TrainClientMixin",
+    "botamochi129.manual_enchance.client.mixin.RenderConditionMixin",
+    "botamochi129.manual_enchance.client.mixin.ResourcePackCreatorPropertiesMixin",
+    "botamochi129.manual_enchance.client.mixin.ResourcePackCreatorPropertiesAccessor",
+    "botamochi129.manual_enchance.client.mixin.TrainPropertiesMixin",
+    "botamochi129.manual_enchance.client.mixin.CustomResourcesMixin",
+    "botamochi129.manual_enchance.client.mixin.ICustomResourcesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

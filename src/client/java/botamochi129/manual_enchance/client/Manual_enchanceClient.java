@@ -1,8 +1,7 @@
-package com.manual_enchance.client;
+package botamochi129.manual_enchance.client;
 
-import com.manual_enchance.Manual_enchance;
-import com.manual_enchance.util.TrainAccessor;
-import mtr.data.TrainClient;
+import botamochi129.manual_enchance.Manual_enchance;
+import botamochi129.manual_enchance.util.TrainAccessor;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -11,7 +10,6 @@ import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.datafixer.fix.EntityMinecartIdentifiersFix;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;

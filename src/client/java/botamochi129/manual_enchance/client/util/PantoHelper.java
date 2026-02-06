@@ -1,4 +1,4 @@
-package com.manual_enchance.client.util;
+package botamochi129.manual_enchance.client.util;
 
 import mtr.data.TrainClient;
 

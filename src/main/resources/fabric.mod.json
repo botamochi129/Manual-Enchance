@@ -11,10 +11,10 @@
   "environment": "*",
   "entrypoints": {
     "client": [
-      "com.manual_enchance.client.Manual_enchanceClient"
+      "botamochi129.manual_enchance.client.Manual_enchanceClient"
     ],
     "main": [
-      "com.manual_enchance.Manual_enchance"
+      "botamochi129.manual_enchance.Manual_enchance"
     ]
   },
   "mixins": [

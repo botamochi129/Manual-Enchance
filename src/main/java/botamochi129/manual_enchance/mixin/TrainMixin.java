@@ -1,9 +1,7 @@
-package com.manual_enchance.mixin;
+package botamochi129.manual_enchance.mixin;
 
-import com.google.gson.JsonObject;
-import com.manual_enchance.Manual_enchance;
-import com.manual_enchance.util.TrainAccessor;
-import mtr.client.CustomResources;
+import botamochi129.manual_enchance.Manual_enchance;
+import botamochi129.manual_enchance.util.TrainAccessor;
 import mtr.data.Depot;
 import mtr.data.Train;
 import net.minecraft.world.World;
@@ -116,7 +114,7 @@ public abstract class TrainMixin implements TrainAccessor {
         if (self.trainId == null) return "";
 
         // Mapをループして、自分の trainId に含まれるキーワードを探す
-        for (java.util.Map.Entry<String, String> entry : com.manual_enchance.Manual_enchance.HORN_MAP.entrySet()) {
+        for (java.util.Map.Entry<String, String> entry : Manual_enchance.HORN_MAP.entrySet()) {
             if (self.trainId.contains(entry.getKey())) {
                 return entry.getValue();
             }

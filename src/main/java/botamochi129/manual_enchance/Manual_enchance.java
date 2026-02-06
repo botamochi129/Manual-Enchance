@@ -1,7 +1,7 @@
-package com.manual_enchance;
+package botamochi129.manual_enchance;
 
-import com.manual_enchance.mixin.SidingAccessor; // Accessorのインポート
-import com.manual_enchance.util.TrainAccessor;
+import botamochi129.manual_enchance.mixin.SidingAccessor; // Accessorのインポート
+import botamochi129.manual_enchance.util.TrainAccessor;
 import mtr.data.RailwayData;
 import mtr.data.TrainServer;
 import net.fabricmc.api.ModInitializer;

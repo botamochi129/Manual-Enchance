@@ -1,7 +1,7 @@
-package com.manual_enchance.client.mixin;
+package botamochi129.manual_enchance.client.mixin;
 
 import com.google.gson.JsonObject;
-import com.manual_enchance.Manual_enchance;
+import botamochi129.manual_enchance.Manual_enchance;
 import mtr.client.CustomResources;
 import mtr.client.DoorAnimationType;
 import mtr.client.TrainProperties;
