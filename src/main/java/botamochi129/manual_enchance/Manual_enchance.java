@@ -15,10 +15,12 @@ import java.util.Map;
 
 public class Manual_enchance implements ModInitializer {
     public static final Identifier REVERSER_PACKET_ID = new Identifier("manual_enchance", "reverser_packet");
+    public static final Identifier REVERSER_DIRECT_PACKET_ID = new Identifier("manual_enchance", "reverser_direct_packet");
     public static final Identifier REVERSER_SYNC_S2C_PACKET_ID = new Identifier("manual_enchance", "reverser_sync_s2c");
     public static final Identifier DIRECT_NOTCH_PACKET_ID = new Identifier("manual_enchance", "direct_notch");
     public static final Identifier PANTO_UPDATE_PACKET = new Identifier("manual_enchance", "panto_update");
     public static final Identifier HORN_PACKET_ID = new Identifier("manual_enchance", "train_horn");
+    public static final Identifier ROLLSIGN_UPDATE_PACKET = new Identifier("manual_enchance", "rollsign_update");
 
     public static final Map<String, String> HORN_MAP = new HashMap<>();
 
@@ -49,6 +51,39 @@ public class Manual_enchance implements ModInitializer {
                                     }
                                 });
                             }
+                        }
+                    }
+                });
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(REVERSER_DIRECT_PACKET_ID, (server, player, handler, buf, responseSender) -> {
+            int targetValue = buf.readInt();
+            long trainId = buf.readLong();
+
+            server.execute(() -> {
+                RailwayData railwayData = RailwayData.getInstance(player.getWorld());
+                if (railwayData == null) return;
+
+                railwayData.sidings.forEach(siding -> {
+                    for (TrainServer train : ((SidingAccessor) siding).getTrains()) {
+                        if (train.id == trainId) {
+                            if (train instanceof TrainAccessor accessor) {
+                                // 直接値をセット
+                                accessor.setReverser(targetValue);
+
+                                // --- 以下、既存の同期ロジックを再利用 ---
+                                PacketByteBuf syncBuf = PacketByteBufs.create();
+                                syncBuf.writeLong(trainId);
+                                syncBuf.writeInt(accessor.getReverser());
+
+                                server.getPlayerManager().getPlayerList().forEach(p -> {
+                                    if (p.getWorld().getRegistryKey().equals(player.getWorld().getRegistryKey())) {
+                                        ServerPlayNetworking.send(p, REVERSER_SYNC_S2C_PACKET_ID, syncBuf);
+                                    }
+                                });
+                            }
+                            break;
                         }
                     }
                 });
@@ -104,6 +139,36 @@ public class Manual_enchance implements ModInitializer {
                 // 全プレイヤーに拡散（これで全員の耳に音が届くようになる）
                 server.getPlayerManager().getPlayerList().forEach(p -> {
                     ServerPlayNetworking.send(p, HORN_PACKET_ID, outBuf);
+                });
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(ROLLSIGN_UPDATE_PACKET, (server, player, handler, buf, responseSender) -> {
+            long trainId = buf.readLong();
+            // ここでクライアントから送られてきた ID を読み取る（順番に注意）
+            String rollsignId = buf.readString();
+            int nextIndex = buf.readInt();
+
+            server.execute(() -> {
+                RailwayData railwayData = RailwayData.getInstance(player.getWorld());
+                if (railwayData != null) {
+                    railwayData.sidings.forEach(siding -> {
+                        for (TrainServer train : ((SidingAccessor) siding).getTrains()) {
+                            if (train.id == trainId && train instanceof TrainAccessor accessor) {
+                                // 修正：IDを指定してセットする
+                                accessor.setRollsignIndex(rollsignId, nextIndex);
+                            }
+                        }
+                    });
+                }
+
+                // 同期パケットも ID を含めて送る
+                PacketByteBuf outBuf = PacketByteBufs.create();
+                outBuf.writeLong(trainId);
+                outBuf.writeString(rollsignId); // 追加
+                outBuf.writeInt(nextIndex);
+                server.getPlayerManager().getPlayerList().forEach(p -> {
+                    ServerPlayNetworking.send(p, ROLLSIGN_UPDATE_PACKET, outBuf);
                 });
             });
         });

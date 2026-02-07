@@ -10,8 +10,15 @@
   "key.manual_enchance.reverser_up": "Reverser Up",
   "key.manual_enchance.panto": "Pantograph Switching",
   "key.manual_enchance.horn": "Horn",
+  "key.manual_enchance.rollsign": "Rollsign",
   "gui.mtr.part_render_condition_pantagraph_down": "Render: Pantograph Down",
   "gui.mtr.part_render_condition_pantagraph_5m": "Render: Pantograph 5M",
   "gui.mtr.part_render_condition_pantagraph_w51": "Render: Pantograph W51",
-  "gui.mtr.part_render_condition_pantagraph_6m": "Render: Pantograph 6M"
+  "gui.mtr.part_render_condition_pantagraph_6m": "Render: Pantograph 6M",
+  "gui.manual_enchance.is_rollsign": "Is Rollsign",
+  "gui.manual_enchance.rollsign_steps": "Steps: %s",
+  "gui.manual_enchance.rollsign_animation": "Enable Animation",
+  "gui.manual_enchance.rollsign_id_hint": "Rollsign ID",
+  "gui.manual_enchance.rollsign_texture_hint": "Texture Path (e.g. mtr:example/example.png)",
+  "gui.manual_enchance.rollsign_steps_hint": "Steps"
 }

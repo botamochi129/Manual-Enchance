@@ -1,6 +1,7 @@
 package botamochi129.manual_enchance.util;
 
 import java.util.List;
+import java.util.Map;
 
 // @Mixin は削除します
 public interface TrainAccessor {
@@ -20,4 +21,13 @@ public interface TrainAccessor {
     void setPantographState(int state);
 
     String getHornSoundId();
+
+    void setRollsignIndex(String key, int index);
+    int getRollsignIndex(String key);
+    void setRollsignOffset(String key, float offset); // 追加
+    float getRollsignOffset(String key);
+    java.util.Set<String> getRollsignIds();
+    Map<String, Integer> getRollsignIndices();
+    void setRollsignSteps(String key, int steps);
+    int getRollsignSteps(String key);
 }

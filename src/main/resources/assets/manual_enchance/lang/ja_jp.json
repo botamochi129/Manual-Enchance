@@ -10,8 +10,15 @@
   "key.manual_enchance.reverser_up": "リバーサー上げ",
   "key.manual_enchance.panto": "パンタグラフ切り替え",
   "key.manual_enchance.horn": "警笛",
+  "key.manual_enchance.rollsign": "手動方向幕",
   "gui.mtr.part_render_condition_pantagraph_down": "描画方式: パンタグラフ下降",
   "gui.mtr.part_render_condition_pantagraph_5m": "描画方式: パンタグラフ5M",
   "gui.mtr.part_render_condition_pantagraph_w51": "描画方式: パンタグラフW51",
-  "gui.mtr.part_render_condition_pantagraph_6m": "描画方式: パンタグラフ6M"
+  "gui.mtr.part_render_condition_pantagraph_6m": "描画方式: パンタグラフ6M",
+  "gui.manual_enchance.is_rollsign": "手動方向幕",
+  "gui.manual_enchance.rollsign_steps": "分割数: %s",
+  "gui.manual_enchance.rollsign_animation": "回転アニメーションを有効化",
+  "gui.manual_enchance.rollsign_id_hint": "方向幕ID",
+  "gui.manual_enchance.rollsign_texture_hint": "テクスチャパス (例: mtr:example/example.png)",
+  "gui.manual_enchance.rollsign_steps_hint": "分割数"
 }

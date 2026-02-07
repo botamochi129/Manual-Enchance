@@ -4,6 +4,7 @@ import botamochi129.manual_enchance.Manual_enchance;
 import botamochi129.manual_enchance.util.TrainAccessor;
 import mtr.data.Depot;
 import mtr.data.Train;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -14,7 +15,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Mixin(value = Train.class, remap = false)
 public abstract class TrainMixin implements TrainAccessor {
@@ -120,6 +123,42 @@ public abstract class TrainMixin implements TrainAccessor {
             }
         }
         return "";
+    }
+
+    @Unique private final Map<String, Integer> rollsignIndices = new HashMap<>();
+    @Unique private final Map<String, Float> rollsignOffsets = new HashMap<>();
+
+    @Override
+    public void setRollsignIndex(String key, int index) {
+        rollsignIndices.put(key, index);
+    }
+
+    @Override
+    public int getRollsignIndex(String key) {
+        return rollsignIndices.getOrDefault(key, 0);
+    }
+
+    @Override
+    public float getRollsignOffset(String key) {
+        return rollsignOffsets.getOrDefault(key, 0.0f);
+    }
+
+    @Override
+    public Map<String, Integer> getRollsignIndices() {
+        return rollsignIndices;
+    }
+
+    @Unique private final Map<String, Integer> rollsignStepsMap = new HashMap<>();
+
+    @Override
+    public void setRollsignSteps(String key, int steps) {
+        rollsignStepsMap.put(key, steps);
+    }
+
+    @Override
+    public int getRollsignSteps(String key) {
+        // 登録されていない場合は、とりあえず大きな値（または1）を返す
+        return rollsignStepsMap.getOrDefault(key, 1);
     }
 
     /**
