@@ -1,0 +1,36 @@
+{
+	"schemaVersion": 1,
+	"id": "manual_enchance",
+	"version": "${version}",
+	"name": "Manual-Enchance",
+	"description": "manual_enchance",
+	"authors": [
+		"botamochi129"
+	],
+	"contact": {
+		"homepage": "https://github.com/zbx1425/mtr-addon-template",
+		"sources": "https://github.com/zbx1425/mtr-addon-template"
+	},
+	"license": "MIT",
+	"icon": "icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"botamochi129.manual_enchance.fabric.MainFabric"
+		],
+		"client": [
+			"botamochi129.manual_enchance.fabric.MainFabricClient"
+		],
+		"modmenu": [
+			"botamochi129.manual_enchance.fabric.ModMenuApiImpl"
+		]
+	},
+	"mixins": [
+		"manual_enchance.mixins.json"
+	],
+	"depends": {
+		"fabric": "*",
+		"minecraft": "*",
+		"mtr": "*"
+	}
+}

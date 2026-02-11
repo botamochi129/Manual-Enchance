@@ -1,0 +1,44 @@
+modLoader = "javafml"
+loaderVersion = "[36,)"
+license = "MIT"
+issueTrackerURL="https://github.com/zbx1425/mtr-addon-template/issues"
+
+[[mods]]
+modId = "manual_enchance"
+version = "${version}"
+displayName = "Manual-Enchance"
+displayURL = "https://github.com/zbx1425/mtr-addon-template/"
+
+authors = "botamochi129"
+description = "manual_enchance"
+logoFile = "icon.png"
+
+displayTest = "IGNORE_ALL_VERSION"
+
+[[dependencies.manual_enchance]]
+modId = "forge"
+mandatory = true
+versionRange = "[36,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.manual_enchance]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.16.5,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.manual_enchance]]
+modId = "architectury"
+mandatory = true
+versionRange = "[1.26.37,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.manual_enchance]]
+modId = "mtr"
+mandatory = true
+versionRange = "1.0"
+ordering = "AFTER"
+side = "BOTH"
