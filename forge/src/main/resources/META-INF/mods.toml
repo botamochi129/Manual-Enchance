@@ -11,7 +11,7 @@ displayURL = "https://github.com/botamochi129/Manual-Enchance/"
 
 authors = "botamochi129"
 description = "Enhances the manual operation function of MTRmod."
-logoFile = "icon.png"
+logoFile = "assets/manual_enchance/icon.png"
 
 displayTest = "IGNORE_ALL_VERSION"
 

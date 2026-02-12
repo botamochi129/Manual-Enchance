@@ -12,7 +12,7 @@
 		"sources": "https://github.com/botamochi129/Manual-Enchance"
 	},
 	"license": "MIT",
-	"icon": "icon.png",
+	"icon": "assets/manual_enchance/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [

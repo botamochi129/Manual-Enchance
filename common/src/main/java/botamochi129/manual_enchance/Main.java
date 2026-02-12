@@ -6,6 +6,7 @@ import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import mtr.data.RailwayData;
 import mtr.data.TrainServer;
+import mtr.mappings.Utilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -102,7 +103,11 @@ public class Main {
 
 	// 共通ヘルパー: 列車を探して処理を実行
 	private static void processTrain(net.minecraft.world.entity.player.Player player, long trainId, java.util.function.Consumer<TrainAccessor> action) {
+		#if MC_VERSION >= "12000"
 		RailwayData data = RailwayData.getInstance(player.level());
+		#else
+		RailwayData data = RailwayData.getInstance(player.level);
+		#endif
 		if (data == null) return;
 		data.sidings.forEach(siding -> {
 			((SidingAccessor) siding).getTrains().forEach(train -> {
@@ -123,6 +128,10 @@ public class Main {
 
 	// 共通ヘルパー: 同じワールドのプレイヤー全員に送信
 	private static void broadcast(net.minecraft.world.entity.player.Player player, ResourceLocation id, FriendlyByteBuf buf) {
+		#if MC_VERSION >= "12000"
 		NetworkManager.sendToPlayers(((ServerPlayer)player).serverLevel().players(), id, buf);
+		#else
+		NetworkManager.sendToPlayers(((ServerPlayer)player).getLevel().players(), id, buf);
+		#endif
 	}
 }

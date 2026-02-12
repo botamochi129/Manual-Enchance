@@ -9,7 +9,9 @@ import io.netty.buffer.Unpooled;
 import mtr.SoundEvents;
 import mtr.client.ClientData;
 import mtr.data.TrainClient;
+import mtr.mappings.RegistryUtilities;
 import mtr.mappings.SoundInstanceMapper;
+import mtr.mappings.Text;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -74,7 +76,7 @@ public class MainClient {
 						NetworkManager.sendToServer(Main.PANTO_UPDATE_PACKET, buf);
 
 						String[] names = {"DOWN", "5.0m", "W51", "6.0m"};
-						client.player.displayClientMessage(Component.literal("§b[Pantograph] §f" + names[next]), true);
+						client.player.displayClientMessage(Text.literal("§b[Pantograph] §f" + names[next]), true);
 						break;
 					}
 				}
@@ -140,7 +142,7 @@ public class MainClient {
 						String soundId = ((TrainAccessor) tc).getHornSoundId();
 						if (soundId != null && !soundId.isEmpty()) {
 							client.level.playSound(client.player, client.player.getX(), client.player.getY(), client.player.getZ(),
-									SoundEvent.createVariableRangeEvent(new ResourceLocation(soundId)), SoundSource.BLOCKS, 1.0F, 1.0F);
+									RegistryUtilities.createSoundEvent(new ResourceLocation(soundId)), SoundSource.BLOCKS, 1.0F, 1.0F);
 						}
 						break;
 					}
@@ -178,7 +180,7 @@ public class MainClient {
 	private static void pollJoystick(Minecraft client) {
 		String currentName = GLFW.glfwGetJoystickName(GLFW.GLFW_JOYSTICK_1);
 		if (currentName != null && !currentName.equals(lastJoystickName)) {
-			client.player.displayClientMessage(Component.literal("§b[Manual Enhance] §fコントローラー接続: §e" + currentName), false);
+			client.player.displayClientMessage(Text.literal("§b[Manual Enhance] §fコントローラー接続: §e" + currentName), false);
 			lastJoystickName = currentName;
 		}
 

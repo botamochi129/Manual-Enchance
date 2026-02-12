@@ -6,6 +6,6 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 
 @Mixin(ResourcePackCreatorProperties.class)
 public interface ResourcePackCreatorPropertiesAccessor {
-    @Invoker("updateModel")
+    @Invoker(value = "updateModel", remap = false)
     void callUpdateModel();
 }

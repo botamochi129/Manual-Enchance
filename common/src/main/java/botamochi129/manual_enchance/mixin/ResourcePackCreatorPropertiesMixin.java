@@ -17,9 +17,9 @@ import java.util.List;
 @Mixin(ResourcePackCreatorProperties.class)
 public abstract class ResourcePackCreatorPropertiesMixin implements IResourcePackCreatorPropertiesHelper {
 
-    @Shadow public abstract JsonArray getPropertiesPartsArray();
+    @Shadow(remap = false) public abstract JsonArray getPropertiesPartsArray();
 
-    @Shadow protected abstract void updateModel();
+    @Shadow(remap = false) protected abstract void updateModel();
 
     @Unique
     private static final List<String> CUSTOM_LIST = Arrays.asList(

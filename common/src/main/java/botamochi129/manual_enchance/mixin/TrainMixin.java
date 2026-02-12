@@ -51,6 +51,10 @@ public abstract class TrainMixin implements TrainAccessor {
     @Unique
     private int pantographState = 0;
 
+    /**
+     * @author botamochi129
+     * @reason To implement custom manual notch logic for Manual Enchance.
+     */
     @Overwrite
     public boolean changeManualSpeed(boolean isAccelerate) {
         if (isAccelerate) {
@@ -231,25 +235,57 @@ public abstract class TrainMixin implements TrainAccessor {
             this.lastFixedProgress = this.railProgress;
         }
 
-        double multiplier = switch (this.manualNotch) {
-            case 5 -> 1.0;
-            case 4 -> 0.8;
-            case 3 -> 0.6;
-            case 2 -> 0.4;
-            case 1 -> 0.2;
-            case 0 -> 0.0;
-            // ブレーキ側はリバーサーに関係なく減速として働く
-            case -1 -> -0.1428;
-            case -2 -> -0.2857;
-            case -3 -> -0.4285;
-            case -4 -> -0.5714;
-            case -5 -> -0.7142;
-            case -6 -> -0.8571;
-            case -7 -> -1.0;
-            case -8 -> -1.25;
-            case -9 -> -2.0;
-            default -> 0.0;
-        };
+        double multiplier;
+        switch (this.manualNotch) {
+            case 5:
+                multiplier = 1.0;
+                break;
+            case 4:
+                multiplier = 0.8;
+                break;
+            case 3:
+                multiplier = 0.6;
+                break;
+            case 2:
+                multiplier = 0.4;
+                break;
+            case 1:
+                multiplier = 0.2;
+                break;
+            case 0:
+                multiplier = 0.0;
+                break;
+            case -1:
+                multiplier = -0.1428;
+                break;
+            case -2:
+                multiplier = -0.2857;
+                break;
+            case -3:
+                multiplier = -0.4285;
+                break;
+            case -4:
+                multiplier = -0.5714;
+                break;
+            case -5:
+                multiplier = -0.7142;
+                break;
+            case -6:
+                multiplier = -0.8571;
+                break;
+            case -7:
+                multiplier = -1.0;
+                break;
+            case -8:
+                multiplier = -1.25;
+                break;
+            case -9:
+                multiplier = -2.0;
+                break;
+            default:
+                multiplier = 0.0;
+                break;
+        }
 
         if (ticksElapsed > 0) {
             float delta = (float) (this.accelerationConstant * multiplier * ticksElapsed);
