@@ -128,7 +128,7 @@ task setupFiles() {
             from "common/src/main/BuildConfigTemplate.java"
             into "common/src/main/java/botamochi129/manual_enchance"
             filter(ReplaceTokens, tokens: [
-                    "version"         : minecraft_version + "-" + rootProject.mod_version,
+                    "version"         : rootProject.mod_version + "+" + minecraft_version,
                     "protocol_version": rootProject.mod_protocol_version ?: "1",
                     "build_time"      : Instant.now().epochSecond.toString()
             ])
@@ -140,7 +140,7 @@ task setupFiles() {
 allprojects {
     apply plugin: "architectury-plugin"
 
-    version = minecraft_version + "-" + project.mod_version
+    version = project.mod_version + "+" + minecraft_version
     group = project.maven_group
 
     repositories {

@@ -16,12 +16,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(value = ResourcePackCreatorScreen.class, remap = false)
+@Mixin(value = ResourcePackCreatorScreen.class)
 public abstract class ResourcePackCreatorScreenMixin extends ScreenMapper {
-    @Shadow private int editingPartIndex;
-    @Shadow protected abstract void updateControls(boolean formatTextFields);
-    @Shadow public abstract boolean isEditing();
-    @Shadow private WidgetBetterCheckbox checkboxIsDisplay;
+    @Shadow(remap = false) private int editingPartIndex;
+    @Shadow(remap = false) protected abstract void updateControls(boolean formatTextFields);
+    @Shadow(remap = false) public abstract boolean isEditing();
+    @Shadow(remap = false) private WidgetBetterCheckbox checkboxIsDisplay;
 
     // ユニークなフィールドとして定義（初期化は init 内で行う）
     @Unique private WidgetBetterCheckbox checkboxIsRollsign;
@@ -104,7 +104,7 @@ public abstract class ResourcePackCreatorScreenMixin extends ScreenMapper {
         this.setRollsignWidgetsVisible(false);
     }
 
-    @Inject(method = "updateControls", at = @At("TAIL"))
+    @Inject(method = "updateControls", at = @At("TAIL"), remap = false)
     private void onUpdateControls(boolean formatTextFields, CallbackInfo ci) {
         if (this.checkboxIsRollsign == null) return;
 

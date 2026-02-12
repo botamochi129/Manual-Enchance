@@ -12,10 +12,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import com.mojang.blaze3d.vertex.PoseStack;
 #endif
 
-@Mixin(RenderDrivingOverlay.class)
+@Mixin(value = RenderDrivingOverlay.class, remap = false)
 public class RenderDrivingOverlayMixin {
 
-    @Inject(method = "render", at = @At("HEAD"), cancellable = true, remap = false)
+    @Inject(method = "render*", at = @At("HEAD"), cancellable = true)
     #if MC_VERSION >= "12000" 
     private static void cancelMTRHUD(GuiGraphics graphics, CallbackInfo ci) {
         // 1.20.1用の処理
