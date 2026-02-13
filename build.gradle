@@ -11,7 +11,8 @@ plugins {
 }
 
 String default_minecraft_version = "1.16.5"
-String minecraft_version = rootProject.properties.containsKey("buildVersion") ? rootProject.getProperties().get("buildVersion") : default_minecraft_version
+rootProject.ext.minecraft_version = rootProject.properties.containsKey("buildVersion") ? rootProject.getProperties().get("buildVersion") : default_minecraft_version
+String minecraft_version = rootProject.ext.minecraft_version
 int minecraft_main_version = minecraft_version.split("\\.")[1] as int
 String minecraft_version_int = minecraft_version.split("\\.")[0] +
         minecraft_version.split("\\.")[1].padLeft(2, '0') +
@@ -56,6 +57,9 @@ subprojects {
         })
 
         compileOnly files("${rootProject.projectDir}/checkouts/mtr-common.jar")
+
+        implementation "org.msgpack:msgpack-core:+"
+        //shadowCommon "org.msgpack:msgpack-core:+"
     }
 }
 

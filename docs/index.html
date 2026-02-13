@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Manual Enchance Docs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <style>
+    /* ANTE風の微調整 */
+    :root { --theme-color: #0078D4; } /* MTRカラー */
+    .sidebar { background-color: #f8f9fa; }
+    section.content { padding-top: 30px; }
+  </style>
+</head>
+<body>
+  <div id="app">読み込み中...</div>
+  <script>
+    window.$docsify = {
+      name: 'Manual-Enchance Docs',
+      repo: 'https://github.com/botamochi129/Manual-Enchance',
+      loadSidebar: true,
+      coverpage: false,
+      auto2top: true,
+      
+      // 検索機能
+      search: {
+        placeholder: '検索...',
+        noData: '結果なし',
+        depth: 6
+      },
+
+      // サイドバーの設定
+      alias: {
+        '/.*/_sidebar.md': '/_sidebar.md'
+      },
+      subMaxLevel: 3, // 見出しの深さをANTEに合わせて調整
+
+      // デザイン設定
+      themeColor: '#0078D4',
+      'flexible-alerts': {
+        style: 'flat'
+      }
+    }
+  </script>
+
+  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+
+  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/dist/index.min.js"></script>
+  <script src="https://unpkg.com/docsify-plugin-flexible-alerts"></script>
+
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-javascript.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
+</body>
+</html>

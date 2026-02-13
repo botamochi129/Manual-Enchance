@@ -2,18 +2,24 @@ package botamochi129.manual_enchance.mixin;
 
 import botamochi129.manual_enchance.Main;
 import botamochi129.manual_enchance.util.TrainAccessor;
+import com.llamalad7.mixinextras.sugar.Local;
 import mtr.data.Depot;
+import mtr.data.MessagePackHelper;
 import mtr.data.Train;
+import mtr.path.PathData;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.Level;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
+import net.minecraft.world.phys.Vec3;
+import org.msgpack.core.MessagePacker;
+import org.msgpack.value.Value;
+import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +44,11 @@ public abstract class TrainMixin implements TrainAccessor {
     @Shadow
     protected int nextStoppingIndex;
 
+    @Shadow @Final public int trainCars;
+    @Shadow @Final public int spacing;
+
+    @Shadow public abstract boolean isReversed();
+
     // 状態
     private float nextManualSpeed = 0.0f;
     private double nextManualProgress = 0.0;
@@ -51,24 +62,19 @@ public abstract class TrainMixin implements TrainAccessor {
     @Unique
     private int pantographState = 0;
 
-    /**
-     * @author botamochi129
-     * @reason To implement custom manual notch logic for Manual Enchance.
-     */
-    @Overwrite
-    public boolean changeManualSpeed(boolean isAccelerate) {
+    @Inject(method = "changeManualSpeed", at = @At("HEAD"), cancellable = true)
+    public void onChangeManualSpeed(boolean isAccelerate, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
         if (isAccelerate) {
             if (this.doorValue <= 0.01F && this.manualNotch < 5) {
                 this.manualNotch++;
-                return true;
+                cir.setReturnValue(true);
             }
         } else {
             if (this.manualNotch > -9) {
                 this.manualNotch--;
-                return true;
+                cir.setReturnValue(true);
             }
         }
-        return false;
     }
 
     @Override
@@ -147,6 +153,39 @@ public abstract class TrainMixin implements TrainAccessor {
         return "";
     }
 
+    @Inject(method = "<init>(Lnet/minecraft/network/FriendlyByteBuf;)V",
+            at = @At("RETURN"),
+            remap = false,
+            require = 0)
+    private void injectReadPacket(FriendlyByteBuf packet, CallbackInfo ci) {
+        try {
+            this.pantographState = packet.readInt();
+        } catch (Exception ignored) {}
+    }
+
+    @Inject(method = "writePacket(Lnet/minecraft/network/FriendlyByteBuf;)V",
+            at = @At("TAIL"),
+            remap = false,
+            require = 0)
+    private void injectWritePacket(FriendlyByteBuf packet, CallbackInfo ci) {
+        try {
+            packet.writeInt(this.pantographState);
+        } catch (Exception ignored) {}
+    }
+
+    @Inject(method = "<init>(JFLjava/util/List;Ljava/util/List;IIFZIILjava/util/Map;)V", at = @At("TAIL"))
+    private void injectReadMessagePack(long sidingId, float railLength, List<PathData> path, List<Double> distances, int repeatIndex1, int repeatIndex2, float accelerationConstant, boolean isManualAllowed, int maxManualSpeed, int manualToAutomaticTime, Map<String, Value> map, CallbackInfo ci) {
+        Value pantoValue = map.get("manualEnchance$pantoState");
+        if (pantoValue != null && !pantoValue.isNilValue()) {
+            this.pantographState = pantoValue.asIntegerValue().asInt();
+        }
+    }
+
+    @Inject(method = "toMessagePack", at = @At("TAIL"))
+    private void injectToMessagePack(MessagePacker messagePacker, CallbackInfo ci) throws IOException {
+        messagePacker.packString("manualEnchance$pantoState").packInt(this.pantographState);
+    }
+
     @Unique
     private final Map<String, Integer> rollsignIndices = new HashMap<>();
     @Unique
@@ -184,6 +223,32 @@ public abstract class TrainMixin implements TrainAccessor {
     public int getRollsignSteps(String key) {
         // 登録されていない場合は、とりあえず大きな値（または1）を返す
         return rollsignStepsMap.getOrDefault(key, 1);
+    }
+
+    @Shadow public abstract float getModelZOffset();
+
+    @Shadow @Final public List<PathData> path;
+
+    @Unique
+    public Vec3 manualEnchance$getHeadPosition() {
+        Train self = (Train)(Object)this;
+
+        double headProgress = self.isReversed()
+                ? this.railProgress - (this.trainCars - 1) * this.spacing
+                : this.railProgress;
+
+        double tempRailProgress = Math.max(headProgress - this.getModelZOffset(), 0);
+
+        int index = self.getIndex(tempRailProgress, false);
+
+        if (this.path == null || this.path.isEmpty() || index >= this.path.size()) {
+            return Vec3.ZERO;
+        }
+
+        double offset = (index == 0) ? 0 : this.distances.get(index - 1);
+
+        return this.path.get(index).rail.getPosition(tempRailProgress - offset)
+                .add(0, self.transportMode.railOffset, 0);
     }
 
     /**

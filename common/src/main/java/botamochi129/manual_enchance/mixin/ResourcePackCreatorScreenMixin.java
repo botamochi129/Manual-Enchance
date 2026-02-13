@@ -32,7 +32,12 @@ public abstract class ResourcePackCreatorScreenMixin extends ScreenMapper {
 
     protected ResourcePackCreatorScreenMixin() { super(null); }
 
-    @Inject(method = "init", at = @At("TAIL"))
+    @Inject(
+            method = {"init", "method_25426"},
+            at = @At("TAIL"),
+            remap = true,
+            require = 0
+    )
     private void onInit(CallbackInfo ci) {
         // --- ウィジェットの生成 ---
         this.checkboxIsRollsign = new WidgetBetterCheckbox(0, 0, 0, 20, Text.translatable("gui.manual_enchance.is_rollsign"), (checked) -> {

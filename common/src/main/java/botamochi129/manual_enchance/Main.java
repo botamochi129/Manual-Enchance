@@ -1,12 +1,12 @@
 package botamochi129.manual_enchance;
 
-import botamochi129.manual_enchance.mixin.SidingAccessor;
+import botamochi129.manual_enchance.util.SidingAccessor;
+import botamochi129.manual_enchance.util.SidingDataManager;
 import botamochi129.manual_enchance.util.TrainAccessor;
+import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import mtr.data.RailwayData;
-import mtr.data.TrainServer;
-import mtr.mappings.Utilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,7 +17,6 @@ import java.util.Map;
 public class Main {
 	public static final String MOD_ID = "manual_enchance";
 
-	// Identifier は ResourceLocation になります
 	public static final ResourceLocation REVERSER_PACKET_ID = new ResourceLocation(MOD_ID, "reverser_packet");
 	public static final ResourceLocation REVERSER_DIRECT_PACKET_ID = new ResourceLocation(MOD_ID, "reverser_direct_packet");
 	public static final ResourceLocation REVERSER_SYNC_S2C_PACKET_ID = new ResourceLocation(MOD_ID, "reverser_sync_s2c");
@@ -25,6 +24,7 @@ public class Main {
 	public static final ResourceLocation PANTO_UPDATE_PACKET = new ResourceLocation(MOD_ID, "panto_update");
 	public static final ResourceLocation HORN_PACKET_ID = new ResourceLocation(MOD_ID, "train_horn");
 	public static final ResourceLocation ROLLSIGN_UPDATE_PACKET = new ResourceLocation(MOD_ID, "rollsign_update");
+	public static final ResourceLocation SIDING_PANTO_UPDATE_PACKET = new ResourceLocation(MOD_ID, "siding_panto_update");
 
 	public static final Map<String, String> HORN_MAP = new HashMap<>();
 
@@ -98,6 +98,46 @@ public class Main {
 				out.writeInt(nextIndex);
 				broadcast(context.getPlayer(), ROLLSIGN_UPDATE_PACKET, out);
 			}));
+		});
+
+		NetworkManager.registerReceiver(NetworkManager.Side.C2S, SIDING_PANTO_UPDATE_PACKET, (buf, context) -> {
+			long sidingId = buf.readLong();
+			int state = buf.readInt();
+			context.queue(() -> {
+				// 1. サーバー側のマネージャーに保存（永続化用）
+				SidingDataManager.setPantoState(sidingId, state);
+
+				// 2. そのSidingに所属する全列車の状態を更新（即時反映）
+        #if MC_VERSION >= "12000"
+        RailwayData data = RailwayData.getInstance(context.getPlayer().level());
+        #else
+				RailwayData data = RailwayData.getInstance(context.getPlayer().level);
+        #endif
+
+				if (data != null) {
+					data.sidings.forEach(siding -> {
+						if (siding.id == sidingId) {
+							((SidingAccessor) siding).getTrains().forEach(train -> {
+								((TrainAccessor) train).setPantographState(state);
+
+								// 3. 全クライアントへ「この列車のパンタを変えろ」と通知
+								FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+								out.writeLong(train.id);
+								out.writeInt(state);
+								broadcast(context.getPlayer(), PANTO_UPDATE_PACKET, out);
+							});
+						}
+					});
+				}
+			});
+		});
+
+		LifecycleEvent.SERVER_STARTED.register(server -> {
+			SidingDataManager.load(server.overworld());
+		});
+
+		LifecycleEvent.SERVER_STOPPING.register(server -> {
+			SidingDataManager.save(server.overworld());
 		});
 	}
 

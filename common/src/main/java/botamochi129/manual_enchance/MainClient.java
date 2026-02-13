@@ -8,7 +8,9 @@ import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import io.netty.buffer.Unpooled;
 import mtr.SoundEvents;
 import mtr.client.ClientData;
+import mtr.data.Train;
 import mtr.data.TrainClient;
+import mtr.data.TrainServer;
 import mtr.mappings.RegistryUtilities;
 import mtr.mappings.SoundInstanceMapper;
 import mtr.mappings.Text;
@@ -20,6 +22,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 import java.nio.ByteBuffer;
@@ -122,11 +125,12 @@ public class MainClient {
 
 		NetworkManager.registerReceiver(NetworkManager.Side.S2C, Main.PANTO_UPDATE_PACKET, (buf, context) -> {
 			long trainId = buf.readLong();
-			int newState = buf.readInt();
+			int state = buf.readInt();
 			context.queue(() -> {
 				for (TrainClient tc : ClientData.TRAINS) {
 					if (tc.id == trainId) {
-						((TrainAccessor) tc).setPantographState(newState);
+						((TrainAccessor) tc).setPantographState(state);
+						break;
 					}
 				}
 			});
@@ -137,12 +141,19 @@ public class MainClient {
 			context.queue(() -> {
 				Minecraft client = Minecraft.getInstance();
 				if (client.level == null) return;
+
 				for (TrainClient tc : ClientData.TRAINS) {
 					if (tc.id == trainId) {
 						String soundId = ((TrainAccessor) tc).getHornSoundId();
 						if (soundId != null && !soundId.isEmpty()) {
-							client.level.playSound(client.player, client.player.getX(), client.player.getY(), client.player.getZ(),
-									RegistryUtilities.createSoundEvent(new ResourceLocation(soundId)), SoundSource.BLOCKS, 1.0F, 1.0F);
+							boolean isReversed = tc.isReversed();
+							int headCarIndex = isReversed ? Math.max(0, tc.trainCars - 1) : 0;
+
+							Vec3 pos = ((TrainAccessor) tc).manualEnchance$getHeadPosition();
+
+							client.level.playSound(client.player, pos.x, pos.y, pos.z,
+									RegistryUtilities.createSoundEvent(new ResourceLocation(soundId)),
+									SoundSource.BLOCKS, 2.0F, 1.0F);
 						}
 						break;
 					}
@@ -158,6 +169,7 @@ public class MainClient {
 				for (TrainClient tc : ClientData.TRAINS) {
 					if (tc.id == trainId) {
 						((TrainAccessor) tc).setRollsignIndex(rollsignId, nextIndex);
+						break;
 					}
 				}
 			});
@@ -348,6 +360,27 @@ public class MainClient {
 				buf.writeLong(train.id);
 				NetworkManager.sendToServer(Main.REVERSER_PACKET_ID, buf);
 				((TrainAccessor) train).changeReverser(isUp);
+				break;
+			}
+		}
+	}
+
+	public static void playHornLocal(long trainId) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.level == null) return;
+
+		for (TrainClient tc : ClientData.TRAINS) {
+			if (tc.id == trainId) {
+				String soundId = ((TrainAccessor) tc).getHornSoundId();
+				if (soundId != null && !soundId.isEmpty()) {
+					// 先頭車両の座標を取得
+					Vec3 pos = ((TrainAccessor) tc).manualEnchance$getHeadPosition();
+
+					// ローカルで再生（全クライアントにパケットは飛ばない）
+					client.level.playSound(client.player, pos.x, pos.y, pos.z,
+							RegistryUtilities.createSoundEvent(new ResourceLocation(soundId)),
+							SoundSource.BLOCKS, 2.0F, 1.0F);
+				}
 				break;
 			}
 		}

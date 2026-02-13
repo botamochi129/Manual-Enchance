@@ -14,11 +14,11 @@ repositories {
 	}
 }
 
-//loom {
-//	mixin {
-//		defaultRefmapName = "mixins.manual_enchance.refmap.json"
-//	}
-//}
+loom {
+	mixin {
+		defaultRefmapName = "mixins.manual_enchance.refmap.json"
+	}
+}
 
 configurations {
 	common
@@ -34,6 +34,8 @@ dependencies {
 
 	modApi "com.terraformersmc:modmenu:${rootProject.ext.mod_menu_version}"
 	modApi "${rootProject.architectury_id}:architectury-fabric:${rootProject.architectury_version}"
+
+	modImplementation "maven.modrinth:mtr-nte:0.5.2+${rootProject.ext.minecraft_version}"
 
 	common(project(path: ":common", configuration: "namedElements")) { transitive false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
@@ -86,4 +88,19 @@ afterEvaluate {
 			task.finalizedBy tasks.moveFabricBuilds
 		}
 	}
+}
+
+repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
+	maven { url "https://jitpack.io" }
 }

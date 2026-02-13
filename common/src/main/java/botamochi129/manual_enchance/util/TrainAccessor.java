@@ -1,5 +1,7 @@
 package botamochi129.manual_enchance.util;
 
+import net.minecraft.world.phys.Vec3;
+
 import java.util.List;
 import java.util.Map;
 
@@ -30,4 +32,6 @@ public interface TrainAccessor {
     Map<String, Integer> getRollsignIndices();
     void setRollsignSteps(String key, int steps);
     int getRollsignSteps(String key);
+
+    Vec3 manualEnchance$getHeadPosition();
 }

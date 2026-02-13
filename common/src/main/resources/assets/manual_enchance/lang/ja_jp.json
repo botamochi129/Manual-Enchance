@@ -5,6 +5,7 @@
   "gui.manual_enchance.tims.status.running": "▶ 走行中",
   "gui.manual_enchance.tims.door_closed": "● 戸閉",
   "gui.manual_enchance.tims.door_open": "○ 進行不可",
+  "gui.manual_enchance.default_panto": "デフォルトのパンタグラフ状態",
   "category.manual_enchance": "Manual Enchanceキー設定",
   "key.manual_enchance.reverser_down":  "リバーサー下げ",
   "key.manual_enchance.reverser_up": "リバーサー上げ",

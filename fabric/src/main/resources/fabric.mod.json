@@ -12,7 +12,7 @@
 		"sources": "https://github.com/botamochi129/Manual-Enchance"
 	},
 	"license": "MIT",
-	"icon": "assets/manual_enchance/icon.png",
+	"icon": "icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
@@ -26,7 +26,8 @@
 		]
 	},
 	"mixins": [
-		"manual_enchance.mixins.json"
+		"manual_enchance.mixins.json",
+		"manual_enchance.fabric.mixins.json"
 	],
 	"depends": {
 		"fabric": "*",

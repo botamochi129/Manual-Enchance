@@ -2,11 +2,14 @@ plugins {
 	id "com.github.johnrengelman.shadow"
 }
 
-//loom {
-//	forge {
-//		mixinConfig "manual_enchance.mixins.json"
-//	}
-//}
+loom {
+	forge {
+		mixinConfigs = [
+			"manual_enchance.mixins.json",
+			"manual_enchance.forge.mixins.json"
+	]
+	}
+}
 
 architectury {
 	platformSetupLoomIde()
@@ -24,6 +27,10 @@ configurations {
 dependencies {
 	forge "net.minecraftforge:forge:${rootProject.forge_version}"
 	modApi "${rootProject.architectury_id}:architectury-forge:${rootProject.architectury_version}"
+
+	modImplementation("maven.modrinth:mtr-nte:0.5.2+${rootProject.ext.minecraft_version}") {
+		transitive = false
+	}
 
 	common(project(path: ":common", configuration: "namedElements")) { transitive false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
@@ -78,6 +85,21 @@ afterEvaluate {
 			if (System.env.GITHUB_ACTIONS) {
 				task.dependsOn rootProject.tasks.setupLibrary
 			}
+		}
+	}
+}
+
+repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		//forRepositories(fg.repository) // Only add this if you're using ForgeGradle, otherwise remove this line
+		filter {
+			includeGroup "maven.modrinth"
 		}
 	}
 }
