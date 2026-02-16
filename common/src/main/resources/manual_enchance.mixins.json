@@ -6,7 +6,8 @@
   "mixins": [
     "TrainMixin",
     "SidingMixin",
-    "SidingDeployMixin"
+    "SidingDeployMixin",
+    "RailwayDataRepairMixin"
   ],
   "client": [
     "CustomResourcesMixin",

@@ -104,6 +104,10 @@ public abstract class SidingScreenMixin extends SavedRailScreenBase<Siding> {
         require = 0
     )
     private void renderPantoLabel(GuiGraphics graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+        if (buttonDefaultPanto != null) {
+            buttonDefaultPanto.visible = !isSelectingTrain;
+        }
+
         if (!isSelectingTrain) {
             graphics.drawString(this.font, Text.translatable("gui.manual_enchance.default_panto"),
                     SQUARE_SIZE, SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2 + TEXT_PADDING, 0xFFFFFFFF);
@@ -116,6 +120,10 @@ public abstract class SidingScreenMixin extends SavedRailScreenBase<Siding> {
             require = 0
     )
     private void renderPantoLabel(PoseStack matrices, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+        if (buttonDefaultPanto != null) {
+            buttonDefaultPanto.visible = !isSelectingTrain;
+        }
+
         if (!isSelectingTrain) {
             this.font.draw(matrices, Text.translatable("gui.manual_enchance.default_panto"),
                     SQUARE_SIZE, SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2 + TEXT_PADDING, 0xFFFFFFFF);

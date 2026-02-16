@@ -172,19 +172,35 @@ public abstract class TrainMixin implements TrainAccessor {
             packet.writeInt(this.pantographState);
         } catch (Exception ignored) {}
     }
-
-    @Inject(method = "<init>(JFLjava/util/List;Ljava/util/List;IIFZIILjava/util/Map;)V", at = @At("TAIL"))
-    private void injectReadMessagePack(long sidingId, float railLength, List<PathData> path, List<Double> distances, int repeatIndex1, int repeatIndex2, float accelerationConstant, boolean isManualAllowed, int maxManualSpeed, int manualToAutomaticTime, Map<String, Value> map, CallbackInfo ci) {
-        Value pantoValue = map.get("manualEnchance$pantoState");
-        if (pantoValue != null && !pantoValue.isNilValue()) {
-            this.pantographState = pantoValue.asIntegerValue().asInt();
-        }
-    }
-
-    @Inject(method = "toMessagePack", at = @At("TAIL"))
-    private void injectToMessagePack(MessagePacker messagePacker, CallbackInfo ci) throws IOException {
-        messagePacker.packString("manualEnchance$pantoState").packInt(this.pantographState);
-    }
+//
+//    @Inject(method = "<init>(JFLjava/util/List;Ljava/util/List;IIFZIILjava/util/Map;)V", at = @At("TAIL"))
+//    private void injectReadMessagePack(long sidingId, float railLength, List<PathData> path, List<Double> distances, int repeatIndex1, int repeatIndex2, float accelerationConstant, boolean isManualAllowed, int maxManualSpeed, int manualToAutomaticTime, Map<String, Value> map, CallbackInfo ci) {///        Value pantoValue = map.get("manualEnchance$pantoState");
+//        if (pantoValue != null && !pantoValue.isNilValue()) {
+//            this.pantographState = pantoValue.asIntegerValue().asInt();
+//        }
+//
+//        try {
+//            if (map != null && map.containsKey("manualEnchance$pantoState")) {
+//                Value pantoValue = map.get("manualEnchance$pantoState");
+//
+//                if (pantoValue != null && pantoValue.isIntegerValue()) {
+//                    this.pantographState = pantoValue.asIntegerValue().asInt() % 4;
+//                } else {
+//                    this.pantographState = 0;
+//                    System.err.println("[ManualEnchance-Repair] Invalid pantoState type detected. Resetting to 0.");
+//                }
+//            }
+//        } catch (Exception e) {
+//            this.pantographState = 0;
+//            System.err.println("[ManualEnchance-Critical] Data corruption detected in MessagePack map. Repairing...");
+//            e.printStackTrace();
+//        }
+//    }
+//
+//    @Inject(method = "toMessagePack", at = @At("TAIL"))
+//    private void injectToMessagePack(MessagePacker messagePacker, CallbackInfo ci) throws IOException {
+//        messagePacker.packString("manualEnchance$pantoState").packInt(this.pantographState);
+//    }
 
     @Unique
     private final Map<String, Integer> rollsignIndices = new HashMap<>();
