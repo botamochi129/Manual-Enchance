@@ -1,5 +1,6 @@
 package botamochi129.manual_enchance;
 
+import botamochi129.manual_enchance.util.RailwayDataAccessor;
 import botamochi129.manual_enchance.util.SidingAccessor;
 import botamochi129.manual_enchance.util.SidingDataManager;
 import botamochi129.manual_enchance.util.TrainAccessor;
@@ -7,6 +8,7 @@ import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import mtr.data.RailwayData;
+import mtr.mappings.Text;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -25,6 +27,8 @@ public class Main {
 	public static final ResourceLocation HORN_PACKET_ID = new ResourceLocation(MOD_ID, "train_horn");
 	public static final ResourceLocation ROLLSIGN_UPDATE_PACKET = new ResourceLocation(MOD_ID, "rollsign_update");
 	public static final ResourceLocation SIDING_PANTO_UPDATE_PACKET = new ResourceLocation(MOD_ID, "siding_panto_update");
+	public static final ResourceLocation COUPLING_MODE_PACKET_ID = new ResourceLocation(MOD_ID, "coupling_mode");
+	public static final ResourceLocation UNCOUPLE_PACKET_ID = new ResourceLocation(MOD_ID, "uncouple");
 
 	public static final Map<String, String> HORN_MAP = new HashMap<>();
 
@@ -98,6 +102,34 @@ public class Main {
 				out.writeInt(nextIndex);
 				broadcast(context.getPlayer(), ROLLSIGN_UPDATE_PACKET, out);
 			}));
+		});
+
+		// 7. 連結待機モードの切り替え
+		NetworkManager.registerReceiver(NetworkManager.Side.C2S, COUPLING_MODE_PACKET_ID, (buf, context) -> {
+			long trainId = buf.readLong();
+			boolean mode = buf.readBoolean();
+			context.queue(() -> processTrain(context.getPlayer(), trainId, accessor -> {
+				accessor.manualEnchance$setCouplingMode(mode);
+				// 状態を全プレイヤーに同期（任意。必要ならS2Cパケットを作成）
+			}));
+		});
+
+		// 8. 解結（切り離し）
+		NetworkManager.registerReceiver(NetworkManager.Side.C2S, UNCOUPLE_PACKET_ID, (buf, context) -> {
+			long trainId = buf.readLong();
+			context.queue(() -> {
+        		#if MC_VERSION >= "12000"
+				RailwayData data = RailwayData.getInstance(context.getPlayer().level());
+				#else
+				RailwayData data = RailwayData.getInstance(context.getPlayer().level);
+				#endif
+				if (data == null) return;
+				// Accessor経由でMapから自分(Slave)を削除
+				((RailwayDataAccessor) data).manualEnchance$getCouplingMap().remove(trainId);
+
+				// クライアントへメッセージを送るなどの処理（任意）
+				context.getPlayer().displayClientMessage(Text.literal("§6[ManualEnchance] §f列車を切り離しました"), false);
+			});
 		});
 
 		NetworkManager.registerReceiver(NetworkManager.Side.C2S, SIDING_PANTO_UPDATE_PACKET, (buf, context) -> {

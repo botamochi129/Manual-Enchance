@@ -14,7 +14,6 @@ public abstract class TrainScriptContextMixin {
 
     @Unique
     public void playHorn() {
-        // 先ほど MainClient に作成したローカル再生メソッドを呼び出す
         botamochi129.manual_enchance.MainClient.playHornLocal(train.id);
     }
 }

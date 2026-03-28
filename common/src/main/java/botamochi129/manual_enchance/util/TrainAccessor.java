@@ -1,11 +1,11 @@
 package botamochi129.manual_enchance.util;
 
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Map;
 
-// @Mixin は削除します
 public interface TrainAccessor {
     int getManualNotch();
     boolean getIsCurrentlyManual();
@@ -34,4 +34,9 @@ public interface TrainAccessor {
     int getRollsignSteps(String key);
 
     Vec3 manualEnchance$getHeadPosition();
+
+    boolean manualEnchance$getPositionFixed();
+    void manualEnchance$setPositionFixed(boolean fixed);
+    boolean manualEnchance$isCouplingMode();
+    void manualEnchance$setCouplingMode(boolean mode);
 }

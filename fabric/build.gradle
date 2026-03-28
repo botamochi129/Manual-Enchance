@@ -35,7 +35,7 @@ dependencies {
 	modApi "com.terraformersmc:modmenu:${rootProject.ext.mod_menu_version}"
 	modApi "${rootProject.architectury_id}:architectury-fabric:${rootProject.architectury_version}"
 
-	modImplementation "maven.modrinth:mtr-nte:0.5.2+${rootProject.ext.minecraft_version}"
+	modImplementation include("maven.modrinth:mtr-nte:0.5.2+${rootProject.ext.minecraft_version}")
 
 	common(project(path: ":common", configuration: "namedElements")) { transitive false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }

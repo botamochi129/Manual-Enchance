@@ -1,13 +1,17 @@
 package botamochi129.manual_enchance;
 
 import botamochi129.manual_enchance.client.RollsignScreen;
+import botamochi129.manual_enchance.util.CouplingInfo;
+import botamochi129.manual_enchance.util.RailwayDataAccessor;
 import botamochi129.manual_enchance.util.TrainAccessor;
 import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import io.netty.buffer.Unpooled;
 import mtr.SoundEvents;
+import mtr.client.ClientCache;
 import mtr.client.ClientData;
+import mtr.data.RailwayData;
 import mtr.data.Train;
 import mtr.data.TrainClient;
 import mtr.data.TrainServer;
@@ -27,6 +31,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.Map;
 
 public class MainClient {
 
@@ -35,6 +40,7 @@ public class MainClient {
 	private static KeyMapping pantoKey;
 	private static KeyMapping keyHorn;
 	private static KeyMapping keyRollsign;
+	private static KeyMapping keyCoupling;
 
 	private static int lastSentNotch = 0;
 	private static boolean lastButton2Pressed = false;
@@ -51,12 +57,14 @@ public class MainClient {
 		pantoKey = new KeyMapping("key.manual_enchance.panto", GLFW.GLFW_KEY_P, "category.manual_enchance");
 		keyHorn = new KeyMapping("key.manual_enchance.horn", GLFW.GLFW_KEY_RIGHT_SHIFT, "category.manual_enchance");
 		keyRollsign = new KeyMapping("key.manual_enchance.rollsign", GLFW.GLFW_KEY_APOSTROPHE, "category.manual_enchance");
+		keyCoupling = new KeyMapping("key.manual_enchance.coupling", GLFW.GLFW_KEY_C, "category.manual_enchance");
 
 		KeyMappingRegistry.register(keyReverserUp);
 		KeyMappingRegistry.register(keyReverserDown);
 		KeyMappingRegistry.register(pantoKey);
 		KeyMappingRegistry.register(keyHorn);
 		KeyMappingRegistry.register(keyRollsign);
+		KeyMappingRegistry.register(keyCoupling);
 
 		// --- クライアントティックイベント ---
 		ClientTickEvent.CLIENT_POST.register(client -> {
@@ -106,6 +114,43 @@ public class MainClient {
 			// 2. ジョイスティック監視
 			if (GLFW.glfwJoystickPresent(GLFW.GLFW_JOYSTICK_1)) {
 				pollJoystick(client);
+			}
+
+			if (client.player == null) return;
+
+			while (keyCoupling.consumeClick()) {
+				for (TrainClient tc : ClientData.TRAINS) {
+					if (tc.isPlayerRiding(client.player) && tc.isHoldingKey(client.player)) {
+						TrainAccessor acc = (TrainAccessor) tc;
+
+						if (ClientData.DATA_CACHE instanceof RailwayDataAccessor dataAcc) {
+							if (dataAcc.manualEnchance$getCouplingMap().containsKey(tc.id)) {
+								sendUncouplePacket(tc.id);
+								break;
+							}
+
+							if (Math.abs(tc.getSpeed()) > 0.0001f) {
+								client.player.displayClientMessage(Text.literal("§c走行中は増解結モードを変更できません"), false);
+								break;
+							}
+
+							boolean nextMode = !acc.manualEnchance$isCouplingMode();
+							acc.manualEnchance$setCouplingMode(nextMode);
+
+							FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+							buf.writeLong(tc.id);
+							buf.writeBoolean(nextMode);
+							dev.architectury.networking.NetworkManager.sendToServer(Main.COUPLING_MODE_PACKET_ID, buf);
+
+							String msg = nextMode ? "§a連結待機中... (前車にゆっくり接近してください)" : "§7連結モード解除";
+							client.player.displayClientMessage(Text.literal("§b[Coupling] " + msg), false);
+
+						} else {
+							client.player.displayClientMessage(Text.literal("§cError: RailwayDataAccessor not found in ClientCache"), false);
+						}
+						break;
+					}
+				}
 			}
 		});
 
@@ -384,5 +429,11 @@ public class MainClient {
 				break;
 			}
 		}
+	}
+
+	private static void sendUncouplePacket(long trainId) {
+		FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+		buf.writeLong(trainId);
+		NetworkManager.sendToServer(Main.UNCOUPLE_PACKET_ID, buf);
 	}
 }
