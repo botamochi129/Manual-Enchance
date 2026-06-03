@@ -2,9 +2,11 @@ package botamochi129.manual_enchance.mixin;
 
 import botamochi129.manual_enchance.client.PantoHelper;
 import botamochi129.manual_enchance.util.TrainAccessor;
+import mtr.data.Train;
 import mtr.data.TrainClient;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,11 +16,30 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Mixin(value = TrainClient.class, remap = false)
-public abstract class TrainClientMixin implements TrainAccessor { // インターフェースを追加
+public abstract class TrainClientMixin implements TrainAccessor {
+
 
     @Inject(method = "simulateTrain", at = @At("HEAD"))
     private void onSimulateTrainHead(Level world, float ticksElapsed, TrainClient.SpeedCallback speedCallback, TrainClient.AnnouncementCallback announcementCallback, TrainClient.AnnouncementCallback lightRailAnnouncementCallback, CallbackInfo ci) {
         PantoHelper.setCurrentTrain((TrainClient) (Object) this);
+
+        if (this.manualEnchance$getMasterId() != 0L) {
+            long masterId = this.manualEnchance$getMasterId();
+            TrainClient self = (TrainClient) (Object) this;
+            System.out.println("[ManualEnchance-Debug] Client simulateTrain: train=" + self.id + ", masterId=" + masterId);
+
+            for (mtr.data.TrainClient potentialMaster : mtr.client.ClientData.TRAINS) {
+                if (potentialMaster.id == masterId) {
+                    double masterProgress = potentialMaster.getRailProgress();
+                    double offset = this.manualEnchance$getCouplingOffset();
+                    this.setRailProgress(masterProgress - offset);
+                    this.setSpeed(potentialMaster.getSpeed());
+                    System.out.println("[ManualEnchance-Debug] Client coupling applied: master_progress=" + masterProgress + ", offset=" + offset + ", new_progress=" + (masterProgress - offset));
+                    return;
+                }
+            }
+            System.out.println("[ManualEnchance-Warn] Master train " + masterId + " not found in ClientData.TRAINS");
+        }
     }
 
     @Inject(method = "simulateTrain", at = @At("TAIL"))

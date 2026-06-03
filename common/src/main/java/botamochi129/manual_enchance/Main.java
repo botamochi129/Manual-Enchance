@@ -1,20 +1,25 @@
 package botamochi129.manual_enchance;
 
-import botamochi129.manual_enchance.util.RailwayDataAccessor;
+import botamochi129.manual_enchance.util.CouplingManager;
 import botamochi129.manual_enchance.util.SidingAccessor;
+import botamochi129.manual_enchance.util.CouplingInfo;
 import botamochi129.manual_enchance.util.SidingDataManager;
 import botamochi129.manual_enchance.util.TrainAccessor;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import mtr.data.RailwayData;
+import mtr.data.Siding;
+import mtr.data.TrainServer;
 import mtr.mappings.Text;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Main {
 	public static final String MOD_ID = "manual_enchance";
@@ -29,8 +34,12 @@ public class Main {
 	public static final ResourceLocation SIDING_PANTO_UPDATE_PACKET = new ResourceLocation(MOD_ID, "siding_panto_update");
 	public static final ResourceLocation COUPLING_MODE_PACKET_ID = new ResourceLocation(MOD_ID, "coupling_mode");
 	public static final ResourceLocation UNCOUPLE_PACKET_ID = new ResourceLocation(MOD_ID, "uncouple");
+	public static final ResourceLocation COUPLING_SYNC_S2C_PACKET_ID = new ResourceLocation(MOD_ID, "coupling_sync_s2c");
 
 	public static final Map<String, String> HORN_MAP = new HashMap<>();
+
+	// trainId -> last applied sequence for direct-notch
+	private static final Map<Long, Long> lastNotchSeqMap = new ConcurrentHashMap<>();
 
 	public static void init(RegistriesWrapper wrapper) {
 		// --- 1. リバーサー操作 (相対) ---
@@ -57,14 +66,22 @@ public class Main {
 		NetworkManager.registerReceiver(NetworkManager.Side.C2S, DIRECT_NOTCH_PACKET_ID, (buf, context) -> {
 			int targetNotch = buf.readInt();
 			long trainId = buf.readLong();
-			context.queue(() -> processTrain(context.getPlayer(), trainId, accessor -> {
-				accessor.setManualNotchDirect(targetNotch);
-				// 他の全員に通知
-				FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
-				out.writeLong(trainId);
-				out.writeInt(targetNotch);
-				broadcast(context.getPlayer(), DIRECT_NOTCH_PACKET_ID, out);
-			}));
+			long seq = buf.readLong(); // シーケンス番号
+			context.queue(() -> {
+				// シーケンス管理: 古いパケットは無視
+				long last = lastNotchSeqMap.getOrDefault(trainId, Long.MIN_VALUE);
+				if (seq <= last) return;
+				lastNotchSeqMap.put(trainId, seq);
+				processTrain(context.getPlayer(), trainId, accessor -> {
+					accessor.setManualNotchDirect(targetNotch);
+					// 他の全員に通知（シーケンスを含む）
+					FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+					out.writeLong(trainId);
+					out.writeInt(targetNotch);
+					out.writeLong(seq);
+					broadcast(context.getPlayer(), DIRECT_NOTCH_PACKET_ID, out);
+				});
+			});
 		});
 
 		// --- 4. パンタグラフ ---
@@ -104,30 +121,135 @@ public class Main {
 			}));
 		});
 
-		// 7. 連結待機モードの切り替え
+		// --- 7. 連結待機モード ---
 		NetworkManager.registerReceiver(NetworkManager.Side.C2S, COUPLING_MODE_PACKET_ID, (buf, context) -> {
 			long trainId = buf.readLong();
-			boolean mode = buf.readBoolean();
 			context.queue(() -> processTrain(context.getPlayer(), trainId, accessor -> {
-				accessor.manualEnchance$setCouplingMode(mode);
-				// 状態を全プレイヤーに同期（任意。必要ならS2Cパケットを作成）
+				// Legacy handler - actual coupling logic now handled by attempt_coupling
+				// This is kept for potential future use (e.g., UI state)
 			}));
 		});
 
-		// 8. 解結（切り離し）
-		NetworkManager.registerReceiver(NetworkManager.Side.C2S, UNCOUPLE_PACKET_ID, (buf, context) -> {
-			long trainId = buf.readLong();
-			context.queue(() -> {
-        		#if MC_VERSION >= "12000"
+	// --- 8.5. Attempt coupling (server validates safety, called by client when in coupling mode) ---
+	NetworkManager.registerReceiver(NetworkManager.Side.C2S, new ResourceLocation(MOD_ID, "attempt_coupling"), (buf, context) -> {
+		long trainId = buf.readLong();
+		System.out.println("[ManualEnchance-Debug] attempt_coupling request received for trainId: " + trainId);
+		context.queue(() -> {
+				#if MC_VERSION >= "12000"
 				RailwayData data = RailwayData.getInstance(context.getPlayer().level());
 				#else
 				RailwayData data = RailwayData.getInstance(context.getPlayer().level);
 				#endif
-				if (data == null) return;
-				// Accessor経由でMapから自分(Slave)を削除
-				((RailwayDataAccessor) data).manualEnchance$getCouplingMap().remove(trainId);
+				if (data == null) {
+				System.out.println("[ManualEnchance-Error] RailwayData is null on server!");
+				return;
+			}
+			System.out.println("[ManualEnchance-Debug] RailwayData loaded, sidings: " + data.sidings.size());
 
-				// クライアントへメッセージを送るなどの処理（任意）
+				TrainServer slaveCandidate = null;
+				TrainServer masterCandidate = null;
+
+			// Find the train that initiated coupling request
+			for (Siding siding : data.sidings) {
+				for (TrainServer train : ((SidingAccessor) siding).getTrains()) {
+					if (train.id == trainId) {
+						slaveCandidate = train;
+						System.out.println("[ManualEnchance-Debug] Found slave train: " + trainId);
+						break;
+					}
+				}
+				if (slaveCandidate != null) break;
+			}
+			if (slaveCandidate == null) {
+				System.out.println("[ManualEnchance-Error] Slave train not found: " + trainId);
+				return;
+			}
+
+				// Check if already coupled
+				TrainAccessor slaveAcc = (TrainAccessor) slaveCandidate;
+				if (slaveAcc.manualEnchance$getMasterId() != 0L) return;
+
+			// Find nearby train to couple with (anywhere in data.sidings)
+			double bestDistance = Double.MAX_VALUE;
+			int candidateCount = 0;
+			for (Siding siding : data.sidings) {
+				for (TrainServer other : ((SidingAccessor) siding).getTrains()) {
+					if (other.id == trainId) continue; // skip self
+					if (((TrainAccessor) other).manualEnchance$getMasterId() != 0L) continue; // skip already coupled trains
+
+					double slaveProgress = slaveCandidate.getRailProgress();
+					double masterProgress = other.getRailProgress();
+
+					// Calculate front of slave train
+					double slaveFrontProgress = slaveProgress + (slaveCandidate.trainCars * slaveCandidate.spacing);
+
+					// Check if other train is ahead and within coupling distance
+					double distance = masterProgress - slaveFrontProgress;
+					candidateCount++;
+					System.out.println("[ManualEnchance-Debug] Candidate " + other.id + ": distance=" + distance + ", slave=" + slaveFrontProgress + ", master=" + masterProgress);
+					
+					if (distance > 0.0 && distance < 2.5 && distance < bestDistance) {
+						// Check safety conditions
+						boolean isSlaveManual = slaveAcc.getIsCurrentlyManual();
+						boolean isMasterManual = ((TrainAccessor) other).getIsCurrentlyManual();
+
+						// Manual trains: allow if doors closed
+						// Autopilot trains: server decides it's safe when proximity check passes
+						boolean canCouple = slaveAcc.manualEnchance$getDoorValue() <= 0.01f;
+						System.out.println("[ManualEnchance-Debug] Safety check for " + other.id + ": doorValue=" + slaveAcc.manualEnchance$getDoorValue() + ", canCouple=" + canCouple);
+
+						if (canCouple) {
+							masterCandidate = other;
+							bestDistance = distance;
+							System.out.println("[ManualEnchance-Debug] Selected master: " + other.id);
+						}
+					}
+				}
+			}
+			System.out.println("[ManualEnchance-Debug] Total candidates checked: " + candidateCount);
+
+			if (masterCandidate != null) {
+				// Perform coupling
+				double offset = masterCandidate.getRailProgress() - slaveCandidate.getRailProgress();
+				slaveAcc.manualEnchance$setMasterId(masterCandidate.id);
+				slaveAcc.manualEnchance$setCouplingOffset(offset);
+				slaveAcc.manualEnchance$setCouplingMode(false);
+
+				CouplingManager.getCouplingMap().put(trainId, new CouplingInfo(masterCandidate.id, offset));
+				CouplingManager.saveAll(); // Persist immediately
+
+				// Notify all clients of the coupling
+				FriendlyByteBuf notifyBuf = new FriendlyByteBuf(Unpooled.buffer());
+				notifyBuf.writeLong(trainId);
+				notifyBuf.writeLong(masterCandidate.id);
+				notifyBuf.writeDouble(offset);
+				broadcast(context.getPlayer(), COUPLING_SYNC_S2C_PACKET_ID, notifyBuf);
+
+				System.out.println("[ManualEnchance] Coupling successful: " + trainId + " -> " + masterCandidate.id + " (offset=" + offset + ")");
+			} else {
+				System.out.println("[ManualEnchance-Error] Master candidate not found after checking " + candidateCount + " candidates");
+			}
+			});
+		});
+
+		// --- 8. 解結 (切り離し) ---
+		NetworkManager.registerReceiver(NetworkManager.Side.C2S, UNCOUPLE_PACKET_ID, (buf, context) -> {
+			long trainId = buf.readLong();
+			context.queue(() -> {
+				CouplingManager.getCouplingMap().remove(trainId);
+
+				// サーバー側の該当列車のMasterIDを0にリセット
+				processTrain(context.getPlayer(), trainId, accessor -> {
+					accessor.manualEnchance$setMasterId(0L);
+				});
+
+				// クライアント全員に「連結解除」を通知
+				FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+				out.writeLong(trainId);
+				out.writeLong(0L); // MasterID = 0 (解除)
+				out.writeDouble(0.0);
+				broadcast(context.getPlayer(), COUPLING_SYNC_S2C_PACKET_ID, out);
+
 				context.getPlayer().displayClientMessage(Text.literal("§6[ManualEnchance] §f列車を切り離しました"), false);
 			});
 		});
@@ -166,11 +288,24 @@ public class Main {
 
 		LifecycleEvent.SERVER_STARTED.register(server -> {
 			SidingDataManager.load(server.overworld());
+			// Coupling persistent data
+			CouplingManager.loadAll();
 		});
 
 		LifecycleEvent.SERVER_STOPPING.register(server -> {
 			SidingDataManager.save(server.overworld());
+			// save coupling data
+			CouplingManager.saveAll();
 		});
+
+	}
+
+	// Broadcast to all players in the given world (server-side helper)
+	public static void broadcastWorld(net.minecraft.world.level.Level world, ResourceLocation id, FriendlyByteBuf buf) {
+		// Only available on server side
+		if (world instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+			NetworkManager.sendToPlayers(serverLevel.players(), id, buf);
+		}
 	}
 
 	// 共通ヘルパー: 列車を探して処理を実行

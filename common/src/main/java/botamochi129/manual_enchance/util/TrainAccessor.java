@@ -19,6 +19,9 @@ public interface TrainAccessor {
     List<Double> manualEnchance$getDistances();
     double manualEnchance$getRailProgress();
 
+    void setRailProgress(double railProgress);
+    void setSpeed(float speed);
+
     int getPantographState();
     void setPantographState(int state);
 
@@ -39,4 +42,9 @@ public interface TrainAccessor {
     void manualEnchance$setPositionFixed(boolean fixed);
     boolean manualEnchance$isCouplingMode();
     void manualEnchance$setCouplingMode(boolean mode);
+
+    long manualEnchance$getMasterId();
+    void manualEnchance$setMasterId(long id);
+    double manualEnchance$getCouplingOffset();
+    void manualEnchance$setCouplingOffset(double offset);
 }

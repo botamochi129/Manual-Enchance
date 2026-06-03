@@ -2,30 +2,24 @@ package botamochi129.manual_enchance.mixin;
 
 import botamochi129.manual_enchance.Main;
 import botamochi129.manual_enchance.util.CouplingInfo;
-import botamochi129.manual_enchance.util.RailwayDataAccessor;
+import botamochi129.manual_enchance.util.CouplingManager;
 import botamochi129.manual_enchance.util.SidingAccessor;
 import botamochi129.manual_enchance.util.TrainAccessor;
-import com.llamalad7.mixinextras.sugar.Local;
+import mtr.client.ClientData;
 import mtr.data.*;
 import mtr.path.PathData;
-import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import io.netty.buffer.Unpooled;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import org.msgpack.core.MessagePacker;
-import org.msgpack.value.Value;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Mixin(value = Train.class, remap = false)
 public abstract class TrainMixin implements TrainAccessor {
@@ -66,7 +60,7 @@ public abstract class TrainMixin implements TrainAccessor {
     private int pantographState = 0;
 
     @Inject(method = "changeManualSpeed", at = @At("HEAD"), cancellable = true)
-    public void onChangeManualSpeed(boolean isAccelerate, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+    public void onChangeManualSpeed(boolean isAccelerate, CallbackInfoReturnable<Boolean> cir) {
         if (isAccelerate) {
             if (this.doorValue <= 0.01F && this.manualNotch < 5) {
                 this.manualNotch++;
@@ -156,6 +150,16 @@ public abstract class TrainMixin implements TrainAccessor {
         return "";
     }
 
+    @Override
+    public void setRailProgress(double rp) {
+        this.railProgress = rp;
+    }
+
+    @Override
+    public void setSpeed(float sp) {
+        this.speed = sp;
+    }
+
     @Inject(method = "<init>(Lnet/minecraft/network/FriendlyByteBuf;)V",
             at = @At("RETURN"),
             remap = false,
@@ -163,6 +167,9 @@ public abstract class TrainMixin implements TrainAccessor {
     private void injectReadPacket(FriendlyByteBuf packet, CallbackInfo ci) {
         try {
             this.pantographState = packet.readInt();
+
+            this.manualEnchance$masterId = packet.readLong();
+            this.manualEnchance$couplingOffset = packet.readDouble();
         } catch (Exception ignored) {}
     }
 
@@ -173,6 +180,9 @@ public abstract class TrainMixin implements TrainAccessor {
     private void injectWritePacket(FriendlyByteBuf packet, CallbackInfo ci) {
         try {
             packet.writeInt(this.pantographState);
+
+            packet.writeLong(this.manualEnchance$masterId);
+            packet.writeDouble(this.manualEnchance$couplingOffset);
         } catch (Exception ignored) {}
     }
 //
@@ -250,6 +260,14 @@ public abstract class TrainMixin implements TrainAccessor {
 
     @Shadow @Final public int maxManualSpeed;
 
+    @Unique private long manualEnchance$masterId = 0L;
+    @Unique private double manualEnchance$couplingOffset = 0.0;
+
+    @Override public long manualEnchance$getMasterId() { return this.manualEnchance$masterId; }
+    @Override public void manualEnchance$setMasterId(long id) { this.manualEnchance$masterId = id; }
+    @Override public double manualEnchance$getCouplingOffset() { return this.manualEnchance$couplingOffset; }
+    @Override public void manualEnchance$setCouplingOffset(double offset) { this.manualEnchance$couplingOffset = offset; }
+
     @Unique
     public Vec3 manualEnchance$getHeadPosition() {
         Train self = (Train)(Object)this;
@@ -294,6 +312,40 @@ public abstract class TrainMixin implements TrainAccessor {
 
     @Inject(method = "simulateTrain", at = @At("HEAD"))
     private void calculateManualPhysics(Level world, float ticksElapsed, Depot depot, CallbackInfo ci) {
+        if (this.manualEnchance$masterId != 0L) {
+            Train self = (Train)(Object)this;
+            System.out.println("[ManualEnchance-Debug] simulateTrain called: train=" + self.id + ", masterId=" + this.manualEnchance$masterId);
+            
+            boolean found = false;
+            Train master = null;
+
+            RailwayData data = RailwayData.getInstance(world);
+            if (data != null) {
+                for (Siding s : data.sidings) {
+                    for (TrainServer t : ((SidingAccessor) s).getTrains()) {
+                        if (t.id == this.manualEnchance$masterId) {
+                            master = (Train) (Object) t;
+                            found = true;
+                            System.out.println("[ManualEnchance-Debug] Found master train in siding");
+                            break;
+                        }
+                    }
+                    if (found) break;
+                }
+            }
+
+            if (found && master != null) {
+                this.nextManualProgress = master.getRailProgress() - this.manualEnchance$couplingOffset;
+                this.nextManualSpeed = master.getSpeed();
+
+                this.railProgress = this.nextManualProgress;
+                this.speed = this.nextManualSpeed;
+                System.out.println("[ManualEnchance-Debug] Coupling sync applied: progress=" + this.railProgress + ", speed=" + this.speed);
+                return;
+            } else if (this.manualEnchance$masterId != 0L) {
+                System.out.println("[ManualEnchance-Warn] Master train not found for masterId: " + this.manualEnchance$masterId);
+            }
+        }
 
         if (!this.isCurrentlyManual) {
             this.nextManualSpeed = this.speed;
@@ -391,6 +443,8 @@ public abstract class TrainMixin implements TrainAccessor {
                     this.lastFixedProgress = newProgress;
 
                     this.reversed = !this.reversed;
+
+                    this.manualNotch = 0;
                 }
             }
         }
@@ -548,49 +602,6 @@ public abstract class TrainMixin implements TrainAccessor {
         this.manualEnchance$couplingMode = mode;
     }
 
-    // --- 修正版: simulateTrain 内での連結ロジック ---
-    @Inject(method = "simulateTrain", at = @At("TAIL"))
-    private void onSimulateTrainTail(Level world, float ticksElapsed, mtr.data.Depot depot, CallbackInfo ci) {
-        // キャストして ID を取得 (Shadow エラー回避)
-        long myId = ((Train)(Object)this).id;
-
-        // 手動運転中で連結モードが ON の場合のみ実行
-        if (!this.isCurrentlyManual || !manualEnchance$couplingMode) return;
-
-        RailwayData data = RailwayData.getInstance(world);
-        if (data == null) return;
-
-        RailwayDataAccessor dataAccessor = (RailwayDataAccessor) data;
-        Map<Long, CouplingInfo> couplingMap = dataAccessor.manualEnchance$getCouplingMap();
-
-        // 既に連結済み（Slave）なら何もしない
-        if (couplingMap.containsKey(myId)) return;
-
-        // 連結判定の閾値（メートル）
-        final double couplingThreshold = 2.0;
-
-        for (Siding siding : data.sidings) {
-            // SidingAccessor を使ってそのサイディングにいる列車リストを取得
-            for (TrainServer other : ((SidingAccessor) siding).getTrains()) {
-                if (other.id == myId) continue;
-
-                // 距離計算（簡易版：railProgress の差分）
-                double myFrontPos = this.railProgress + (this.trainCars * this.spacing);
-                double distance = other.getRailProgress() - myFrontPos;
-
-                // 前方にあり、かつ閾値以内なら連結（CouplingMap に登録）
-                if (distance > 0 && distance < couplingThreshold) {
-                    double offset = other.getRailProgress() - this.railProgress;
-                    couplingMap.put(myId, new CouplingInfo(other.id, offset));
-
-                    // モードを自動 OFF
-                    this.manualEnchance$couplingMode = false;
-
-                    // サーバー側で通知（任意）
-                    System.out.println("[ManualEnchance] Connected: " + myId + " -> " + other.id);
-                    break;
-                }
-            }
-        }
-    }
+    // Coupling is now handled purely by server-side packet handler in Main.java
+    // This prevents crashes and ensures server authority over coupling decisions
 }

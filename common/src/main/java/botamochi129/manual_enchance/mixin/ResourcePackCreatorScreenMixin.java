@@ -31,7 +31,6 @@ public abstract class ResourcePackCreatorScreenMixin extends ScreenMapper {
     @Unique private WidgetBetterTextField textFieldRollsignSteps;
 
     protected ResourcePackCreatorScreenMixin() { super(null); }
-
     @Inject(
             method = {"init", "method_25426"},
             at = @At("TAIL"),

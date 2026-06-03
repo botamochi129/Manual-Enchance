@@ -21,8 +21,7 @@
     "ResourcePackCreatorScreenMixin",
     "TrainClientMixin",
     "TrainPropertiesMixin",
-    "SidingScreenMixin",
-    "ClientCacheMixin"
+    "SidingScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

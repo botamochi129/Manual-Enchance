@@ -1,37 +1,25 @@
 package botamochi129.manual_enchance;
 
 import botamochi129.manual_enchance.client.RollsignScreen;
-import botamochi129.manual_enchance.util.CouplingInfo;
-import botamochi129.manual_enchance.util.RailwayDataAccessor;
 import botamochi129.manual_enchance.util.TrainAccessor;
 import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import io.netty.buffer.Unpooled;
-import mtr.SoundEvents;
-import mtr.client.ClientCache;
 import mtr.client.ClientData;
-import mtr.data.RailwayData;
-import mtr.data.Train;
 import mtr.data.TrainClient;
-import mtr.data.TrainServer;
 import mtr.mappings.RegistryUtilities;
-import mtr.mappings.SoundInstanceMapper;
 import mtr.mappings.Text;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.util.Map;
 
 public class MainClient {
 
@@ -49,6 +37,10 @@ public class MainClient {
 	private static boolean lastPantoButtonPressed = false;
 	private static boolean lastStartButtonPressed = false;
 	private static int lastKatoReverser = 0;
+
+	// 列車ごとの送信シーケンスおよびクライアント側で最後に適用したシーケンス
+	private static final java.util.Map<Long, Long> localNotchSeqMap = new java.util.HashMap<>();
+	private static final java.util.Map<Long, Long> lastAppliedNotchSeq = new java.util.HashMap<>();
 
 	public static void init() {
 		// --- キーバインディングの登録 ---
@@ -118,40 +110,30 @@ public class MainClient {
 
 			if (client.player == null) return;
 
-			while (keyCoupling.consumeClick()) {
-				for (TrainClient tc : ClientData.TRAINS) {
-					if (tc.isPlayerRiding(client.player) && tc.isHoldingKey(client.player)) {
-						TrainAccessor acc = (TrainAccessor) tc;
+		while (keyCoupling.consumeClick()) {
+			System.out.println("[ManualEnchance-Debug] Coupling key pressed!");
+			for (TrainClient tc : ClientData.TRAINS) {
+				if (tc.isPlayerRiding(client.player) && tc.isHoldingKey(client.player)) {
+					TrainAccessor acc = (TrainAccessor) tc;
+					System.out.println("[ManualEnchance-Debug] Player riding train: " + tc.id + ", masterId=" + acc.manualEnchance$getMasterId());
 
-						if (ClientData.DATA_CACHE instanceof RailwayDataAccessor dataAcc) {
-							if (dataAcc.manualEnchance$getCouplingMap().containsKey(tc.id)) {
-								sendUncouplePacket(tc.id);
-								break;
-							}
-
-							if (Math.abs(tc.getSpeed()) > 0.0001f) {
-								client.player.displayClientMessage(Text.literal("§c走行中は増解結モードを変更できません"), false);
-								break;
-							}
-
-							boolean nextMode = !acc.manualEnchance$isCouplingMode();
-							acc.manualEnchance$setCouplingMode(nextMode);
-
-							FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-							buf.writeLong(tc.id);
-							buf.writeBoolean(nextMode);
-							dev.architectury.networking.NetworkManager.sendToServer(Main.COUPLING_MODE_PACKET_ID, buf);
-
-							String msg = nextMode ? "§a連結待機中... (前車にゆっくり接近してください)" : "§7連結モード解除";
-							client.player.displayClientMessage(Text.literal("§b[Coupling] " + msg), false);
-
-						} else {
-							client.player.displayClientMessage(Text.literal("§cError: RailwayDataAccessor not found in ClientCache"), false);
-						}
+					if (acc.manualEnchance$getMasterId() != 0L) {
+						System.out.println("[ManualEnchance-Debug] Sending uncouple packet for: " + tc.id);
+						sendUncouplePacket(tc.id);
 						break;
 					}
+
+					// Send coupling attempt to server; server will validate all safety conditions
+					System.out.println("[ManualEnchance-Debug] Sending attempt_coupling packet for: " + tc.id);
+					FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+					buf.writeLong(tc.id);
+					NetworkManager.sendToServer(new net.minecraft.resources.ResourceLocation(Main.MOD_ID, "attempt_coupling"), buf);
+					client.player.displayClientMessage(Text.literal("§b[Coupling] §f連結を試みています..."), true);
+					break;
+
 				}
 			}
+		}
 		});
 
 		// --- サーバーからのパケット受信 (S2C) ---
@@ -223,10 +205,30 @@ public class MainClient {
 		NetworkManager.registerReceiver(NetworkManager.Side.S2C, Main.DIRECT_NOTCH_PACKET_ID, (buf, context) -> {
 			long trainId = buf.readLong();
 			int syncedNotch = buf.readInt();
+			long seq = buf.readLong();
 			context.queue(() -> {
+				long last = lastAppliedNotchSeq.getOrDefault(trainId, Long.MIN_VALUE);
+				if (seq < last) return; // 古い同期は無視
+				lastAppliedNotchSeq.put(trainId, seq);
 				for (TrainClient tc : ClientData.TRAINS) {
 					if (tc.id == trainId) {
 						((TrainAccessor) tc).setManualNotchDirect(syncedNotch);
+						break;
+					}
+				}
+			});
+		});
+
+		NetworkManager.registerReceiver(NetworkManager.Side.S2C, Main.COUPLING_SYNC_S2C_PACKET_ID, (buf, context) -> {
+			long slaveId = buf.readLong();
+			long masterId = buf.readLong();
+			double offset = buf.readDouble();
+			context.queue(() -> {
+				for (TrainClient tc : ClientData.TRAINS) {
+					if (tc.id == slaveId) {
+						TrainAccessor acc = (TrainAccessor) tc;
+						acc.manualEnchance$setMasterId(masterId);
+						acc.manualEnchance$setCouplingOffset(offset);
 						break;
 					}
 				}
@@ -386,10 +388,16 @@ public class MainClient {
 		Minecraft client = Minecraft.getInstance();
 		for (TrainClient train : ClientData.TRAINS) {
 			if (train.isPlayerRiding(client.player)) {
+				// 列車別シーケンスを更新して送信（古いパケットの適用を防止）
+				long seq = localNotchSeqMap.getOrDefault(train.id, 0L) + 1L;
+				localNotchSeqMap.put(train.id, seq);
 				FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
 				buf.writeInt(notch);
 				buf.writeLong(train.id);
+				buf.writeLong(seq);
 				NetworkManager.sendToServer(Main.DIRECT_NOTCH_PACKET_ID, buf);
+				// 送信側でもこのシーケンスを適用済みにする（サーバーの応答が来るまでのローカル整合性）
+				lastAppliedNotchSeq.put(train.id, seq);
 				((TrainAccessor) train).setManualNotchDirect(notch);
 				break;
 			}
