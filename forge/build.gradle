@@ -30,6 +30,8 @@ dependencies {
 
 	modImplementation include("maven.modrinth:mtr-nte:0.5.2+${rootProject.ext.minecraft_version}") { transitive = false }
 
+	compileOnly files("${rootProject.projectDir}/checkouts/mtr-forge.jar")
+
 	common(project(path: ":common", configuration: "namedElements")) { transitive false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
 }

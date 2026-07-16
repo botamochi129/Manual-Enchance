@@ -7,12 +7,17 @@
     "TrainMixin",
     "SidingMixin",
     "SidingDeployMixin",
-    "RailwayDataRepairMixin"
+    "RailwayDataRepairMixin",
+    "RailwayDataAccessor",
+    "TrainServerAccessor",
+    "TrainServerMixin",
+    "WebserverMixin"
   ],
   "client": [
     "CustomResourcesMixin",
     "DynamicTrainModelMixin",
     "ICustomResourcesMixin",
+    "ModelTrainBaseAccessor",
     "PartInfoMixin",
     "RenderConditionMixin",
     "RenderDrivingOverlayMixin",
@@ -21,7 +26,8 @@
     "ResourcePackCreatorScreenMixin",
     "TrainClientMixin",
     "TrainPropertiesMixin",
-    "SidingScreenMixin"
+    "SidingScreenMixin",
+    "EditRouteScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

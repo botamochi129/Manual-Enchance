@@ -37,6 +37,8 @@ dependencies {
 
 	modImplementation include("maven.modrinth:mtr-nte:0.5.2+${rootProject.ext.minecraft_version}")
 
+	compileOnly files("${rootProject.projectDir}/checkouts/mtr-fabric.jar")
+
 	common(project(path: ":common", configuration: "namedElements")) { transitive false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
 }

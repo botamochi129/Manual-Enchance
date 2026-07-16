@@ -83,9 +83,14 @@ public class RollsignScreen extends ScreenMapper {
         if (!targetIds.isEmpty()) {
             int currentIndex = ((TrainAccessor) train).getRollsignIndex(currentId);
             int totalSteps = ((TrainAccessor) train).getRollsignSteps(currentId);
-            graphics.drawCenteredString(this.font,
-                    "Index: " + currentIndex + " / " + (totalSteps - 1),
-                    this.width / 2, 100, 0xAAAAAA);
+            java.util.List<String> names = ((TrainAccessor) train).getRollsignNames(currentId);
+            String displayName;
+            if (!names.isEmpty() && currentIndex < names.size()) {
+                displayName = names.get(currentIndex);
+            } else {
+                displayName = "Index: " + currentIndex + " / " + (totalSteps - 1);
+            }
+            graphics.drawCenteredString(this.font, displayName, this.width / 2, 100, 0xAAAAAA);
         }
         }
     #else
@@ -98,9 +103,14 @@ public class RollsignScreen extends ScreenMapper {
         if (!targetIds.isEmpty()) {
             int currentIndex = ((TrainAccessor) train).getRollsignIndex(currentId);
             int totalSteps = ((TrainAccessor) train).getRollsignSteps(currentId);
-            drawCenteredString(poseStack, this.font,
-                    "Index: " + currentIndex + " / " + (totalSteps - 1),
-                    this.width / 2, 100, 0xAAAAAA);
+            java.util.List<String> names = ((TrainAccessor) train).getRollsignNames(currentId);
+            String displayName;
+            if (!names.isEmpty() && currentIndex < names.size()) {
+                displayName = names.get(currentIndex);
+            } else {
+                displayName = "Index: " + currentIndex + " / " + (totalSteps - 1);
+            }
+            drawCenteredString(poseStack, this.font, displayName, this.width / 2, 100, 0xAAAAAA);
         }
     }
     #endif

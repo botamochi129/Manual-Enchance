@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ManualEnchance Dispatch</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; overflow: hidden; }
+#app { display: flex; height: 100%; }
+#map-container { flex: 1; height: 100%; position: relative; }
+#canvas { width: 100%; height: 100%; display: block; }
+#loading {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 48px; color: #666; display: none; pointer-events: none;
+}
+#sidebar { width: 400px; background: #16213e; border-left: 2px solid #0f3460; display: flex; flex-direction: column; }
+#sidebar h1 { font-size: 18px; padding: 16px; background: #0f3460; color: #e94560; letter-spacing: 1px; }
+#train-list { flex: 1; overflow-y: auto; padding: 8px; }
+.train-card { background: #1a1a3e; border: 1px solid #0f3460; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
+.train-card:hover { border-color: #e94560; }
+.train-card.selected { border-color: #e94560; background: #1a1a4e; }
+.train-card .head { display: flex; justify-content: space-between; align-items: center; }
+.train-card .name { font-weight: bold; font-size: 14px; }
+.train-card .badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #0f3460; }
+.train-card .badge.on-route { background: #1b5e20; }
+.train-card .badge.idle { background: #b71c1c; }
+.train-card .badge.coupled { background: #e65100; }
+.train-card .info { font-size: 12px; color: #999; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+.train-card .info span { white-space: nowrap; }
+#detail-panel { background: #0d1b3e; border-top: 2px solid #0f3460; padding: 16px; display: none; }
+#detail-panel h3 { font-size: 14px; margin-bottom: 8px; color: #e94560; }
+#detail-panel .row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #1a1a3e; }
+#detail-panel .row .label { color: #999; }
+#reroute-btn { background: #e94560; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: 8px; width: 100%; }
+#reroute-btn:hover { background: #c73a52; }
+#modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+#modal { background: #16213e; border: 2px solid #0f3460; border-radius: 12px; padding: 24px; width: 420px; max-height: 80vh; overflow-y: auto; }
+#modal h2 { font-size: 16px; margin-bottom: 16px; color: #e94560; }
+#modal label { display: block; font-size: 12px; color: #999; margin: 8px 0 4px; }
+#modal select, #modal input { width: 100%; padding: 8px; border: 1px solid #0f3460; border-radius: 4px; background: #1a1a3e; color: #eee; font-size: 13px; }
+#modal .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+#modal .btn-row button { flex: 1; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+#modal .btn-row .cancel { background: #333; color: #eee; }
+#modal .btn-row .cancel:hover { background: #444; }
+#modal .btn-row .confirm { background: #e94560; color: #fff; }
+#modal .btn-row .confirm:hover { background: #c73a52; }
+#modal .result { margin-top: 12px; padding: 8px; border-radius: 4px; font-size: 12px; display: none; }
+#modal .result.success { background: #1b5e20; color: #a5d6a7; display: block; }
+#modal .result.error { background: #b71c1c; color: #ef9a9a; display: block; }
+#status-bar { height: 28px; background: #0a0a1e; display: flex; align-items: center; padding: 0 12px; font-size: 11px; color: #666; gap: 16px; }
+#status-bar .ok { color: #4caf50; }
+#status-bar .err { color: #f44336; }
+#canvas-tooltip {
+  position: absolute; pointer-events: none; background: rgba(0,0,0,0.8);
+  color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 4px;
+  display: none; white-space: nowrap; z-index: 10;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map-container">
+    <canvas id="canvas"></canvas>
+    <div id="loading">⟳</div>
+    <div id="canvas-tooltip"></div>
+  </div>
+  <div id="sidebar">
+    <h1>ManualEnchance Dispatch</h1>
+    <div id="train-list"></div>
+    <div id="detail-panel">
+      <h3>Train Details</h3>
+      <div id="detail-content"></div>
+      <button id="reroute-btn" onclick="openReroute()">Reroute</button>
+    </div>
+    <div id="status-bar">
+      <span id="status-indicator" class="ok">●</span>
+      <span id="status-text">Ready</span>
+      <span id="train-count" style="margin-left:auto;">Trains: 0</span>
+    </div>
+  </div>
+</div>
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <h2>Reroute Train</h2>
+    <label>Train ID</label>
+    <input type="text" id="modal-train-id" readonly />
+    <label>Train Name</label>
+    <input type="text" id="modal-train-name" readonly />
+    <label>Destination Platform</label>
+    <select id="modal-platform"></select>
+    <label>Route (optional)</label>
+    <select id="modal-route"><option value="-1">Auto</option></select>
+    <div class="btn-row">
+      <button class="cancel" onclick="closeModal()">Cancel</button>
+      <button class="confirm" onclick="confirmReroute()">Reroute</button>
+    </div>
+    <div id="modal-result" class="result"></div>
+  </div>
+</div>
+<script>
+const colors = {
+  bg: '#1a1a2e', surface: '#16213e', border: '#0f3460',
+  accent: '#e94560', text: '#eee', textDim: '#999',
+  onRoute: '#4caf50', idle: '#f44336', coupled: '#ff9800',
+};
+
+let allStations = [];
+let allPlatforms = [];
+let allRoutes = [];
+let allTrains = [];
+let selectedTrainId = null;
+
+let mcMinX, mcMinZ, mcMaxX, mcMaxZ, mcScale, worldW, worldH, canvasW, canvasH;
+
+// -- fabric canvas setup --
+const fabricCanvas = new fabric.Canvas('canvas', {
+  renderOnAddRemove: false, selection: false,
+  backgroundColor: colors.bg,
+});
+const tooltipEl = document.getElementById('canvas-tooltip');
+
+function resize() {
+  const container = document.getElementById('map-container');
+  canvasW = container.clientWidth;
+  canvasH = container.clientHeight;
+  fabricCanvas.setWidth(canvasW);
+  fabricCanvas.setHeight(canvasH);
+  computeTransform();
+  renderAll();
+}
+window.addEventListener('resize', resize);
+
+// -- coordinate transform --
+function computeTransform() {
+  if (allStations.length === 0) return;
+  mcMinX = Infinity; mcMinZ = Infinity; mcMaxX = -Infinity; mcMaxZ = -Infinity;
+  for (const s of allStations) {
+    if (s.x == null) continue;
+    if (s.x < mcMinX) mcMinX = s.x;
+    if (s.x > mcMaxX) mcMaxX = s.x;
+    if (s.z < mcMinZ) mcMinZ = s.z;
+    if (s.z > mcMaxZ) mcMaxZ = s.z;
+  }
+  worldW = mcMaxX - mcMinX || 1;
+  worldH = mcMaxZ - mcMinZ || 1;
+  const pad = 80;
+  mcScale = Math.min((canvasW - pad * 2) / worldW, (canvasH - pad * 2) / worldH);
+}
+
+function toX(mcX) { return (mcX - mcMinX) * mcScale + (canvasW - worldW * mcScale) / 2; }
+function toZ(mcZ) { return (mcZ - mcMinZ) * mcScale + (canvasH - worldH * mcScale) / 2; }
+
+let mouseDownTime = 0;
+let dragDist = 0;
+let dragStartX, dragStartY;
+let zoom = 1;
+let panX = 0, panY = 0;
+
+fabricCanvas.on('mouse:down', opt => {
+  mouseDownTime = Date.now();
+  dragDist = 0;
+  dragStartX = opt.absolutePointer.x;
+  dragStartY = opt.absolutePointer.y;
+  fabricCanvas.selection = false;
+});
+fabricCanvas.on('mouse:move', opt => {
+  if (!fabricCanvas.isDragging) {
+    if (opt.e.buttons === 1 && Date.now() - mouseDownTime > 120) {
+      fabricCanvas.isDragging = true;
+    }
+  }
+  if (fabricCanvas.isDragging) {
+    const vpt = fabricCanvas.viewportTransform;
+    vpt[4] += opt.e.movementX / zoom;
+    vpt[5] += opt.e.movementY / zoom;
+    dragDist += Math.abs(opt.e.movementX) + Math.abs(opt.e.movementY);
+    fabricCanvas.requestRenderAll();
+  }
+});
+fabricCanvas.on('mouse:up', opt => {
+  if (!fabricCanvas.isDragging && dragDist < 5) {
+    handleCanvasClick(opt.absolutePointer);
+  }
+  if (fabricCanvas.isDragging) {
+    fabricCanvas.isDragging = false;
+  }
+});
+fabricCanvas.on('mouse:wheel', opt => {
+  const delta = opt.e.deltaY;
+  let newZoom = zoom * (0.999 ** delta);
+  newZoom = Math.max(0.05, Math.min(20, newZoom));
+  const pt = new fabric.Point(opt.e.offsetX, opt.e.offsetY);
+  fabricCanvas.zoomToPoint(pt, newZoom);
+  zoom = newZoom;
+  opt.e.preventDefault();
+  opt.e.stopPropagation();
+  fabricCanvas.requestRenderAll();
+});
+
+function handleCanvasClick(ptr) {
+  const threshold = 8 / zoom;
+  let closest = null;
+  let closestDist = Infinity;
+  for (const t of allTrains) {
+    if (t.x == null) continue;
+    const cx = toX(t.x) * zoom + fabricCanvas.viewportTransform[4];
+    const cy = toZ(t.z) * zoom + fabricCanvas.viewportTransform[5];
+    const d = Math.hypot(ptr.x - cx, ptr.y - cy);
+    if (d < threshold && d < closestDist) {
+      closestDist = d;
+      closest = t;
+    }
+  }
+  if (closest) {
+    selectTrain(closest.id);
+  }
+}
+
+// -- data loading --
+function fetchJSON(url) {
+  return fetch(url).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+}
+
+function loadMapData() {
+  return fetchJSON('./map').then(data => {
+    allStations = []; allPlatforms = []; allRoutes = [];
+    const worldKeys = Object.keys(data);
+    for (const wk of worldKeys) {
+      const w = data[wk];
+      if (w.stations) allStations = allStations.concat(w.stations);
+      if (w.platforms) allPlatforms = allPlatforms.concat(w.platforms);
+      if (w.routes) allRoutes = allRoutes.concat(w.routes);
+    }
+    computeTransform();
+  });
+}
+
+function loadTrains() {
+  return fetchJSON('./trains').then(data => {
+    allTrains = data.trains || [];
+    renderAll();
+    updateStatus();
+  });
+}
+
+// -- rendering --
+function renderAll() {
+  renderMap();
+  renderTrains();
+  renderTrainList();
+}
+
+function renderMap() {
+  const group = new fabric.Group([], { selectable: false, evented: false });
+  const lineWidth = Math.max(2, 3 * mcScale / 10);
+
+  for (const r of allRoutes) {
+    const colorHex = '#' + r.color.toString(16).padStart(6, '0');
+    const pts = getRouteStationPositions(r);
+    if (pts.length < 2) continue;
+    const poly = new fabric.Polyline(pts, {
+      fill: null, stroke: colorHex, strokeWidth: lineWidth,
+      strokeLineCap: 'round', strokeLineJoin: 'round',
+      opacity: 0.7, selectable: false, evented: false,
+    });
+    group.addWithUpdate(poly);
+  }
+
+  const stationRadius = Math.max(4, 5 * mcScale / 10);
+  const fontSize = Math.max(8, Math.min(14, 12 * mcScale / 10));
+
+  for (const s of allStations) {
+    if (s.x == null) continue;
+    const cx = toX(s.x);
+    const cy = toZ(s.z);
+    const colorHex = '#' + s.color.toString(16).padStart(6, '0');
+    const nameW = s.name.length * fontSize * 0.55;
+    const rectW = Math.max(nameW + 12, stationRadius * 4);
+    const rectH = stationRadius * 3;
+
+    const rect = new fabric.Rect({
+      left: cx - rectW / 2, top: cy - rectH / 2,
+      width: rectW, height: rectH,
+      rx: stationRadius, ry: stationRadius,
+      fill: colors.bg, stroke: colorHex, strokeWidth: Math.max(1, 2 * mcScale / 10),
+      selectable: false, evented: false,
+    });
+
+    const text = new fabric.Text(s.name.replace(/\|/g, ' '), {
+      left: cx, top: cy,
+      fontSize: fontSize, fontFamily: 'Segoe UI, sans-serif',
+      fill: colors.text, textAlign: 'center',
+      originX: 'center', originY: 'center',
+      selectable: false, evented: false,
+    });
+
+    group.addWithUpdate(rect);
+    group.addWithUpdate(text);
+  }
+
+  fabricCanvas.clear();
+  fabricCanvas.backgroundColor = colors.bg;
+  fabricCanvas.add(group);
+  fabricCanvas.requestRenderAll();
+}
+
+function getRouteStationPositions(route) {
+  const result = [];
+  const seen = new Set();
+  for (const rp of route.platformIds) {
+    const p = allPlatforms.find(p2 => p2.id === rp.platformId);
+    if (!p || !p.stationId) continue;
+    const st = allStations.find(s => s.id === p.stationId);
+    if (!st || st.x == null) continue;
+    const key = st.id;
+    if (seen.has(key) && result.length > 1) {
+      result.push({ x: toX(st.x), y: toZ(st.z) });
+      break;
+    }
+    seen.add(key);
+    result.push({ x: toX(st.x), y: toZ(st.z) });
+  }
+  return result;
+}
+
+function renderTrains() {
+  const radius = Math.max(4, 6 * mcScale / 10);
+  for (const t of allTrains) {
+    if (t.x == null) continue;
+    const cx = toX(t.x);
+    const cy = toZ(t.z);
+    const color = t.isOnRoute ? colors.onRoute : colors.idle;
+    const circle = new fabric.Circle({
+      left: cx - radius, top: cy - radius,
+      radius: radius, fill: color, stroke: '#fff',
+      strokeWidth: Math.max(1, 1.5 * mcScale / 10),
+      selectable: false, evented: false,
+    });
+    circle.trainId = t.id;
+    fabricCanvas.add(circle);
+
+    const label = new fabric.Text(t.trainId, {
+      left: cx + radius + 3, top: cy - fontSize / 2,
+      fontSize: Math.max(8, Math.min(11, 10 * mcScale / 10)),
+      fontFamily: 'Segoe UI, sans-serif', fill: color,
+      selectable: false, evented: false,
+    });
+    fabricCanvas.add(label);
+  }
+}
+
+const fontSize = 12;
+
+function renderTrainList() {
+  const list = document.getElementById('train-list');
+  list.innerHTML = '';
+  for (const t of allTrains) {
+    const card = document.createElement('div');
+    card.className = 'train-card' + (t.id === selectedTrainId ? ' selected' : '');
+    card.dataset.id = t.id;
+    card.onclick = () => selectTrain(t.id);
+    card.innerHTML =
+      '<div class="head">' +
+        '<span class="name">' + t.trainId + '</span>' +
+        '<span class="badge ' + (t.isOnRoute ? 'on-route' : 'idle') + '">' + (t.isOnRoute ? 'On Route' : 'Idle') + '</span>' +
+      '</div>' +
+      '<div class="info">' +
+        '<span>Speed: ' + t.speed.toFixed(1) + ' m/s</span>' +
+        '<span>Cars: ' + t.trainCars + '</span>' +
+        '<span>' + t.transportMode + '</span>' +
+      '</div>';
+    list.appendChild(card);
+  }
+}
+
+function selectTrain(id) {
+  selectedTrainId = id;
+  const cards = document.querySelectorAll('.train-card');
+  cards.forEach(c => c.classList.toggle('selected', c.dataset.id === String(id)));
+  const train = allTrains.find(t => t.id === id);
+  const panel = document.getElementById('detail-panel');
+  if (!train) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  document.getElementById('detail-content').innerHTML =
+    '<div class="row"><span class="label">ID</span><span>' + train.id + '</span></div>' +
+    '<div class="row"><span class="label">Name</span><span>' + train.trainId + '</span></div>' +
+    '<div class="row"><span class="label">Siding</span><span>' + train.sidingName + '</span></div>' +
+    '<div class="row"><span class="label">Speed</span><span>' + train.speed.toFixed(2) + ' m/s</span></div>' +
+    '<div class="row"><span class="label">Cars</span><span>' + train.trainCars + '</span></div>' +
+    '<div class="row"><span class="label">Spacing</span><span>' + train.spacing + '</span></div>' +
+    '<div class="row"><span class="label">Status</span><span>' + (train.isOnRoute ? 'On Route' : 'Idle') + '</span></div>' +
+    '<div class="row"><span class="label">Reversed</span><span>' + train.reversed + '</span></div>' +
+    '<div class="row"><span class="label">Progress</span><span>' + train.railProgress.toFixed(1) + '</span></div>';
+}
+
+function updateStatus() {
+  document.getElementById('train-count').textContent = 'Trains: ' + allTrains.length;
+  const indicator = document.getElementById('status-indicator');
+  const text = document.getElementById('status-text');
+  indicator.className = 'ok';
+  text.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+}
+
+function openReroute() {
+  const train = allTrains.find(t => t.id === selectedTrainId);
+  if (!train) return;
+  document.getElementById('modal-train-id').value = train.id;
+  document.getElementById('modal-train-name').value = train.trainId;
+  const platSelect = document.getElementById('modal-platform');
+  platSelect.innerHTML = '';
+  const routeSelect = document.getElementById('modal-route');
+  routeSelect.innerHTML = '<option value="-1">Auto</option>';
+  const seenRoutes = new Set();
+  for (const r of allRoutes) {
+    if (!seenRoutes.has(r.id)) {
+      seenRoutes.add(r.id);
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.name + ' (' + r.transportMode + ')';
+      routeSelect.appendChild(opt);
+    }
+  }
+  const seenPlats = new Set();
+  for (const r of allRoutes) {
+    for (const rp of r.platformIds) {
+      if (seenPlats.has(rp.platformId)) continue;
+      seenPlats.add(rp.platformId);
+      const p = allPlatforms.find(p2 => p2.id === rp.platformId);
+      if (!p) continue;
+      const st = allStations.find(s => s.id === p.stationId);
+      const opt = document.createElement('option');
+      opt.value = rp.platformId;
+      opt.textContent = (st ? st.name + ' - ' : '') + 'Platform ' + rp.platformId;
+      platSelect.appendChild(opt);
+    }
+  }
+  document.getElementById('modal-result').style.display = 'none';
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+
+function confirmReroute() {
+  const trainId = parseInt(document.getElementById('modal-train-id').value);
+  const destId = parseInt(document.getElementById('modal-platform').value);
+  const routeId = parseInt(document.getElementById('modal-route').value);
+  const resultDiv = document.getElementById('modal-result');
+  fetch('./reroute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trainId, destinationId: destId, routeId })
+  })
+  .then(r => r.json())
+  .then(data => {
+    resultDiv.className = 'result ' + (data.success ? 'success' : 'error');
+    resultDiv.textContent = data.message || data.error || 'Done';
+    resultDiv.style.display = 'block';
+    if (data.success) setTimeout(closeModal, 2000);
+  })
+  .catch(err => {
+    resultDiv.className = 'result error';
+    resultDiv.textContent = 'Error: ' + err.message;
+    resultDiv.style.display = 'block';
+  });
+}
+
+function setStatus(type, msg) {
+  const indicator = document.getElementById('status-indicator');
+  const text = document.getElementById('status-text');
+  indicator.className = type;
+  text.textContent = msg;
+  document.getElementById('train-count').textContent = 'Trains: ' + allTrains.length;
+}
+
+function refresh() {
+  setStatus('loading', 'Loading...');
+  loadMapData().then(loadTrains).then(() => {
+    setStatus('ok', 'Updated: ' + new Date().toLocaleTimeString());
+  }).catch(err => {
+    setStatus('err', 'Error: ' + err.message);
+  });
+}
+
+resize();
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

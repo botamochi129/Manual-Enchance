@@ -30,4 +30,14 @@ public abstract class SidingMixin implements SidingAccessor {
         long sidingId = ((Siding)(Object)this).id;
         SidingDataManager.setPantoState(sidingId, state);
     }
+
+    @Override
+    public long manualEnchance$getMasterSidingId() {
+        return SidingDataManager.getMasterSidingId(((Siding)(Object)this).id);
+    }
+
+    @Override
+    public void manualEnchance$setMasterSidingId(long masterSidingId) {
+        SidingDataManager.setMasterSidingId(((Siding)(Object)this).id, masterSidingId);
+    }
 }

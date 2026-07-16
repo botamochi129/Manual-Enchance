@@ -6,6 +6,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Map;
 
+import mtr.data.TrainServer;
+
 public interface TrainAccessor {
     int getManualNotch();
     boolean getIsCurrentlyManual();
@@ -21,6 +23,7 @@ public interface TrainAccessor {
 
     void setRailProgress(double railProgress);
     void setSpeed(float speed);
+    void setDoorValue(float doorValue);
 
     int getPantographState();
     void setPantographState(int state);
@@ -35,11 +38,14 @@ public interface TrainAccessor {
     Map<String, Integer> getRollsignIndices();
     void setRollsignSteps(String key, int steps);
     int getRollsignSteps(String key);
-
-    Vec3 manualEnchance$getHeadPosition();
+    void setRollsignNames(String key, List<String> names);
+    List<String> getRollsignNames(String key);
 
     boolean manualEnchance$getPositionFixed();
     void manualEnchance$setPositionFixed(boolean fixed);
+
+    boolean manualEnchance$getTurnBackDone();
+    void manualEnchance$setTurnBackDone(boolean done);
     boolean manualEnchance$isCouplingMode();
     void manualEnchance$setCouplingMode(boolean mode);
 
@@ -47,4 +53,39 @@ public interface TrainAccessor {
     void manualEnchance$setMasterId(long id);
     double manualEnchance$getCouplingOffset();
     void manualEnchance$setCouplingOffset(double offset);
+
+    Vec3 manualEnchance$getFrontPosition();
+    Vec3 manualEnchance$getRearPosition();
+    Vec3 manualEnchance$getCouplerFrontPos();
+    Vec3 manualEnchance$getCouplerRearPos();
+
+    Vec3 manualEnchance$getDirectionVector(double finalSlaveTargetProg);
+
+    double manualEnchance$getRailProgressAtCar(int car, double longitudinalOffsetBlocks);
+
+    Vec3 callGetRoutePosition(int car, int trainSpacing);
+
+    Vec3 manualEnchance$getPositionByProgress(double frontBogieProgress);
+
+    float[] manualEnchance$getRotationByProgress(double currentCarProgress);
+
+    long manualEnchance$getRouteId();
+    void manualEnchance$syncPathFrom(TrainServer master);
+    float manualEnchance$getBCPressure();
+
+    boolean manualEnchance$isOnRoute();
+    void manualEnchance$setOnRoute(boolean onRoute);
+
+    boolean manualEnchance$getDoorTarget();
+    void manualEnchance$setDoorTarget(boolean target);
+
+    boolean manualEnchance$isWaitingForCouple();
+    void manualEnchance$setWaitingForCouple(boolean waiting);
+
+    void manualEnchance$setBCPressure(float pressure);
+    boolean manualEnchance$getDoorsOpenedAtTerminal();
+    void manualEnchance$setDoorsOpenedAtTerminal(boolean opened);
+
+    void manualEnchance$setNextManualProgress(double progress);
+    void manualEnchance$setLastFixedProgress(double progress);
 }

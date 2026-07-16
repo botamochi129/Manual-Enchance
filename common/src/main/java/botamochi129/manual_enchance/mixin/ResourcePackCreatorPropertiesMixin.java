@@ -2,6 +2,7 @@ package botamochi129.manual_enchance.mixin;
 
 import botamochi129.manual_enchance.client.IResourcePackCreatorPropertiesHelper;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import mtr.client.ResourcePackCreatorProperties;
 import org.spongepowered.asm.mixin.Mixin;
@@ -62,6 +63,36 @@ public abstract class ResourcePackCreatorPropertiesMixin implements IResourcePac
     }
 
     @Unique
+    public void editPartBogie(int index) {
+        JsonObject partObject = this.getPropertiesPartsArray().get(index).getAsJsonObject();
+        boolean isBogie;
+        if (!partObject.has("bogie")) {
+            isBogie = false;
+        } else {
+            JsonElement bogie = partObject.get("bogie");
+            isBogie = bogie.isJsonObject()
+                    || (bogie.isJsonPrimitive() && bogie.getAsBoolean());
+        }
+
+        if (!isBogie) {
+            JsonObject bogieObj = new JsonObject();
+            if (partObject.has("positions")) {
+                bogieObj.add("bogie_position", partObject.getAsJsonArray("positions").deepCopy());
+            } else {
+                bogieObj.add("bogie_position", new JsonArray());
+            }
+            bogieObj.addProperty("is_jacobs_bogie", false);
+            partObject.add("bogie", bogieObj);
+            partObject.remove("rollsign");
+            partObject.remove("display");
+        } else {
+            partObject.addProperty("bogie", false);
+        }
+
+        this.updateModel();
+    }
+
+    @Unique
     public void editPartRollsign(int index) {
         JsonObject partObject = this.getPropertiesPartsArray().get(index).getAsJsonObject();
         boolean isRollsign = partObject.has("rollsign") && partObject.get("rollsign").getAsBoolean();
@@ -69,6 +100,8 @@ public abstract class ResourcePackCreatorPropertiesMixin implements IResourcePac
         if (!isRollsign) {
             // ON にした時の初期値
             partObject.addProperty("rollsign", true);
+            partObject.remove("bogie");
+            partObject.remove("display");
             if (!partObject.has("rollsign_id")) partObject.addProperty("rollsign_id", "example_id");
             if (!partObject.has("rollsign_steps")) partObject.addProperty("rollsign_steps", 1);
             if (!partObject.has("rollsign_texture")) partObject.addProperty("rollsign_texture", "mtr:example/example.png");

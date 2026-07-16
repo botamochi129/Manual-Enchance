@@ -1,7 +1,6 @@
 {
   "package": "botamochi129.manual_enchance.forge.mixin",
-  "mixins": [
-  ],
+  "mixins": [],
   "client": [
     "TrainWrapperMixin",
     "TrainScriptContextMixin"

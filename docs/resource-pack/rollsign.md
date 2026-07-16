@@ -7,13 +7,14 @@
 
 ## プロパティ
 
-| キー | 型 | 説明 |
-| :--- | :--- | :--- |
-| `rollsign` | boolean | 方向幕を使用するかどうかを設定します。 |
-| `rollsign_steps` | int | 方向幕画像の分割数です。例えば、5に設定すると横に5分割され、キー入力で0~4の値から変更できます。 |
-| `rollsign_animation` | boolean | 幕切り替え時に回転アニメーションをつけるかどうかを設定します。 |
-| `rollsign_id` | String | 方向幕のidを設定します。設定がない場合はモデル名がidになります。同じidを異なるパーツに設定することで、同じidの幕は同じ動作になります。 |
-| `rollsign_texture` | String | 幕で使用する画像のパスを設定します。 |
+| キー | 型             | 説明                                                                      |
+| :--- |:--------------|:------------------------------------------------------------------------|
+| `rollsign` | boolean       | 方向幕を使用するかどうかを設定します。                                                     |
+| `rollsign_steps` | int           | 方向幕画像の分割数です。例えば、5に設定すると横に5分割され、キー入力で0~4の値から変更できます。                      |
+| `rollsign_animation` | boolean       | 幕切り替え時に回転アニメーションをつけるかどうかを設定します。                                         |
+| `rollsign_id` | String        | 方向幕のidを設定します。設定がない場合はモデル名がidになります。同じidを異なるパーツに設定することで、同じidの幕は同じ動作になります。 |
+| `rollsign_texture` | String        | 幕で使用する画像のパスを設定します。                                                      |
+| `rollsign_names` | List<String>  | それぞれの幕の名前を設定します。                                                        |
 
 ## 設定例
 
@@ -40,10 +41,11 @@
             "whitelisted_cars": "1",
             "blacklisted_cars": "%1",
             "rollsign": true,
-            "rollsign_steps": 21,
+            "rollsign_steps": 5,
             "rollsign_animation": false,
             "rollsign_id": "front_dest",
-            "rollsign_texture": "mtr:20m_4d_straight/mtr_rollsign.png"
+            "rollsign_texture": "mtr:20m_4d_straight/mtr_rollsign.png",
+            "rollsign_names": ["A駅", "C駅", "E駅", "G駅", "回送"]
         }
     ]
 }

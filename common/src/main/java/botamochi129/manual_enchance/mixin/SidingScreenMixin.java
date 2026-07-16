@@ -30,8 +30,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 public abstract class SidingScreenMixin extends SavedRailScreenBase<Siding> {
 
     @Shadow(remap = false) private boolean isSelectingTrain;
-    @Unique
-    private Button buttonDefaultPanto;
+    @Unique private Button buttonDefaultPanto;
 
     public SidingScreenMixin(Siding savedRailBase, TransportMode transportMode, DashboardScreen dashboardScreen, Component... additionalTexts) {
         super(savedRailBase, transportMode, dashboardScreen, additionalTexts);
@@ -44,48 +43,33 @@ public abstract class SidingScreenMixin extends SavedRailScreenBase<Siding> {
             require = 0
     )
     private void initPantoButton(CallbackInfo ci) {
+        int x = SQUARE_SIZE + textWidth;
+        int pantoY = SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2;
+        int btnWidth = width - textWidth - SQUARE_SIZE * 2;
+
         #if MC_VERSION >= "11903"
         buttonDefaultPanto = Button.builder(Text.literal(""), button -> {
             SidingAccessor accessor = (SidingAccessor) savedRailBase;
             int nextState = (accessor.manualEnchance$getDefaultPantographState() + 1) % 4;
             accessor.manualEnchance$setDefaultPantographState(nextState);
             updatePantoButtonText();
-
-            // サーバーへ通知
             FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
             buf.writeLong(savedRailBase.id);
             buf.writeInt(nextState);
             NetworkManager.sendToServer(Main.SIDING_PANTO_UPDATE_PACKET, buf);
-        })
-        .bounds(0, 0, 0, 20)
-        .build();
+        }).bounds(x, pantoY, btnWidth, 20).build();
         #else
-        buttonDefaultPanto = new Button(0, 0, 0, 20, Text.literal(""), button -> {
+        buttonDefaultPanto = new Button(x, pantoY, btnWidth, 20, Text.literal(""), button -> {
             SidingAccessor accessor = (SidingAccessor) savedRailBase;
             int nextState = (accessor.manualEnchance$getDefaultPantographState() + 1) % 4;
             accessor.manualEnchance$setDefaultPantographState(nextState);
             updatePantoButtonText();
-
-            // サーバーへ通知
             FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
             buf.writeLong(savedRailBase.id);
             buf.writeInt(nextState);
             NetworkManager.sendToServer(Main.SIDING_PANTO_UPDATE_PACKET, buf);
         });
         #endif
-
-        int x = SQUARE_SIZE + textWidth;
-        int y = SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2;
-
-        #if MC_VERSION >= "11903"
-        buttonDefaultPanto.setX(x);
-        buttonDefaultPanto.setY(y);
-        #else
-        buttonDefaultPanto.x = x;
-        buttonDefaultPanto.y = y;
-        #endif
-        buttonDefaultPanto.setWidth(width - textWidth - SQUARE_SIZE * 2);
-
         updatePantoButtonText();
         this.addRenderableWidget(buttonDefaultPanto);
     }
@@ -94,39 +78,27 @@ public abstract class SidingScreenMixin extends SavedRailScreenBase<Siding> {
     private void updatePantoButtonText() {
         int state = ((SidingAccessor)savedRailBase).manualEnchance$getDefaultPantographState();
         String[] names = {"DOWN", "5.0m", "W51", "6.0m"};
-        buttonDefaultPanto.setMessage(Text.literal("Default: " + names[state]));
+        buttonDefaultPanto.setMessage(Text.literal("Default Panto: " + names[state]));
     }
 
     #if MC_VERSION >= "12000"
-    @Inject(
-        method = {"render", "method_25394"}, // 併記
-        at = @At("TAIL"),
-        require = 0
-    )
-    private void renderPantoLabel(GuiGraphics graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
-        if (buttonDefaultPanto != null) {
-            buttonDefaultPanto.visible = !isSelectingTrain;
-        }
-
+    @Inject(method = {"render", "method_25394"}, at = @At("TAIL"), require = 0)
+    private void renderLabels(GuiGraphics graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+        if (buttonDefaultPanto != null) buttonDefaultPanto.visible = !isSelectingTrain;
         if (!isSelectingTrain) {
-            graphics.drawString(this.font, Text.translatable("gui.manual_enchance.default_panto"),
-                    SQUARE_SIZE, SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2 + TEXT_PADDING, 0xFFFFFFFF);
+            int labelX = SQUARE_SIZE;
+            int pantoY = SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2;
+            graphics.drawString(this.font, Text.translatable("gui.manual_enchance.default_panto"), labelX, pantoY, 0xFFFFFFFF);
         }
     }
     #else
-    @Inject(
-            method = {"render", "method_25394"}, // 併記
-            at = @At("TAIL"),
-            require = 0
-    )
-    private void renderPantoLabel(PoseStack matrices, int mouseX, int mouseY, float delta, CallbackInfo ci) {
-        if (buttonDefaultPanto != null) {
-            buttonDefaultPanto.visible = !isSelectingTrain;
-        }
-
+    @Inject(method = {"render", "method_25394"}, at = @At("TAIL"), require = 0)
+    private void renderLabels(PoseStack matrices, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+        if (buttonDefaultPanto != null) buttonDefaultPanto.visible = !isSelectingTrain;
         if (!isSelectingTrain) {
-            this.font.draw(matrices, Text.translatable("gui.manual_enchance.default_panto"),
-                    SQUARE_SIZE, SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2 + TEXT_PADDING, 0xFFFFFFFF);
+            int labelX = SQUARE_SIZE;
+            int pantoY = SQUARE_SIZE * 5 + TEXT_FIELD_PADDING * 2;
+            this.font.draw(matrices, Text.translatable("gui.manual_enchance.default_panto"), labelX, pantoY, 0xFFFFFFFF);
         }
     }
     #endif
