@@ -77,7 +77,7 @@ public abstract class TrainClientMixin extends TrainMixin implements TrainAccess
         // Compute slave railProgress from master's current position on the client.
         // The master's railProgress is updated every tick by MTR's client simulation,
         // giving smooth visual interpolation. Server sync packets (every ~5 ticks)
-        // will correct any drift from the geometric findAdjacentProgress on the server.
+        // will correct any drift from the golden rule (master - offset) on the server.
         double slaveRP = master.getRailProgress() - this.manualEnchance$getCouplingOffset();
         // Clamp to valid path range
         double maxP = (this.distances != null && !this.distances.isEmpty())

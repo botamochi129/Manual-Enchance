@@ -425,20 +425,20 @@ public class CouplingManager {
     }
 
     /**
-     * 折り返し時に連結列車の master/slave を入れ替え、編成を再配置する。
+     * 折り返し時に連結列車の master/slave を入れ替え、再配置する（手動）または MTR に委任（自動）。
      *
-     * 折り返しはルートに組み込まれている（ルート自身が折り返して戻る）ため、リバーサーは
-     * 切り替えず 1（前進）のまま。reversed も切り替えず、同じ向きのままルートに沿って進行する。
-     *
-     * 物理的には、折り返し点 P を境に編成が反転する。旧・最後尾の slave が新しい先頭
-     * (master) になり、編成全体が P を超えた位置 [P, P+全長] に再配置される。
-     * 各列車の新しい railProgress は、折り返し前の railProgress と各編成の長さから算出する：
-     *   newRP[i] = pi + (i より前の編成長の和) + 全長 - (i より後の編成長の和)
-     * （例：master=3000/長100、slave=1100/長60 の場合、
-     *   新master(旧slave)=1100+100+160-0=1360、新slave(旧master)=3000+0+160-60=3100）
+     * Spec §3:
+     * - 旧 chain: oldMaster -> slave1 -> ... -> slaveN
+     * - 新 chain: slaveN(new master) -> slaveN-1 -> ... -> oldMaster
+     * - newRP[i] = pi[i] + beforeSum + totalLength - afterSum
+     * - Pattern A (manual, reposition=true): setRailProgress(newRP), flip reversed, reset speed/notch/BC,
+     *   offset = master.railProgress - slave.railProgress (actual post-reposition)
+     * - Pattern B (auto, reposition=false): MTR warps positions; offset = -(slave.trainCars * slave.spacing)
+     * - syncPathFrom(oldMaster -> newMaster) so new master has return path.
+     * - reverser stays 1 always.
      */
     public static void turnBackCouplingChain(RailwayData data, TrainServer oldMaster, ServerLevel level, ResourceLocation syncPacketId, boolean reposition) {
-        // 1. チェーン構築: oldMaster -> slave1 -> ... -> slaveN
+        // 1. Build chain: oldMaster -> slave1 -> ... -> slaveN
         List<TrainServer> chain = new ArrayList<>();
         chain.add(oldMaster);
         long cur = oldMaster.id;
@@ -457,6 +457,7 @@ public class CouplingManager {
         int n = chain.size() - 1;
         if (n < 0) return;
 
+        // Compute lengths and pre-turnback railProgress
         double[] L = new double[chain.size()];
         double[] pi = new double[chain.size()];
         double totalLength = 0;
@@ -467,7 +468,7 @@ public class CouplingManager {
             pi[i] = ((TrainAccessor) t).manualEnchance$getRailProgress();
         }
 
-        // 2. 各列車の新しい railProgress を算出
+        // 2. Compute newRP for each train (used when reposition=true)
         double[] newRP = new double[chain.size()];
         for (int i = 0; i < chain.size(); i++) {
             double beforeSum = 0;
@@ -477,12 +478,13 @@ public class CouplingManager {
             newRP[i] = pi[i] + beforeSum + totalLength - afterSum;
         }
 
-        LOGGER.info("[turnBackCouplingChain] chain={} totalLength={} newRP={}",
+        LOGGER.info("[turnBackCouplingChain] chain={} totalLength={:.2f} newRP={} reposition={}",
                 chain.stream().map(t -> t.id).toList(),
-                String.format("%.2f", totalLength),
-                java.util.Arrays.toString(newRP));
+                totalLength,
+                java.util.Arrays.toString(newRP),
+                reposition);
 
-        // 3. 一旦全エントリを外す
+        // 3. Clear all entries
         for (TrainServer t : chain) {
             COUPLING_MAP.remove(t.id);
             TrainAccessor a = (TrainAccessor) t;
@@ -491,45 +493,60 @@ public class CouplingManager {
             a.manualEnchance$setPositionFixed(false);
         }
 
-        // 4. 再配置（リバーサーは 1 のまま、reversed は切り替えない）
-        //    手動運転の場合のみ自前で位置を再配置する。自動運転の場合は MTR の物理演算に任せる
-        //    （MTR が master を折り返し位置へ移動し、slave は forceFinalSpeed で offset に従って追随）。
-        double maxPath = 0.0;
-        List<Double> oldMasterDistances = ((TrainAccessor) oldMaster).manualEnchance$getDistances();
-        if (reposition && oldMasterDistances != null && !oldMasterDistances.isEmpty()) {
-            maxPath = oldMasterDistances.get(oldMasterDistances.size() - 1);
-        }
+        // 4. syncPathFrom: copy oldMaster's (return) path to new master (chain[n])
+        TrainServer newMaster = chain.get(n);
+        ((TrainAccessor) newMaster).manualEnchance$syncPathFrom(oldMaster);
+
+        // 5. Common: reverser = 1, positionFixed = false
         for (int i = 0; i < chain.size(); i++) {
             TrainAccessor a = (TrainAccessor) chain.get(i);
             a.setReverser(1);
-            if (reposition) {
+            a.manualEnchance$setPositionFixed(false);
+        }
+
+        // 6. Reposition (manual only) and flip reversed on whole chain
+        if (reposition) {
+            for (int i = 0; i < chain.size(); i++) {
+                TrainAccessor a = (TrainAccessor) chain.get(i);
                 double rp = newRP[i];
                 double len = chain.get(i).trainCars * (double) chain.get(i).spacing;
                 if (rp < len) rp = len;
-                if (maxPath > 0.0 && rp > maxPath) rp = maxPath;
+                // Clamp to max path length
+                List<Double> dists = a.manualEnchance$getDistances();
+                if (dists != null && !dists.isEmpty()) {
+                    double maxP = dists.get(dists.size() - 1);
+                    if (maxP > len && maxP != Double.MAX_VALUE && rp > maxP) rp = maxP;
+                }
                 a.setRailProgress(rp);
                 a.manualEnchance$setNextManualProgress(rp);
                 a.manualEnchance$setLastFixedProgress(rp);
                 a.setSpeed(0.0f);
                 a.setManualNotchDirect(0);
                 a.manualEnchance$setBCPressure(0.0f);
+                // Flip reversed (slaves inherit via per-tick sync)
+                a.setReversed(!a.getReversed());
             }
         }
 
-        // 5. 新しいチェーンを結ぶ: 新 master = chain[n]、その後ろに chain[n-1]..chain[0]
-        //    offset は「再配置後の実際の railProgress 差」から算出する。
-        //    forceFinalSpeed は slave.railProgress = master.railProgress - offset なので、
-        //    offset = master.getRailProgress() - slave.getRailProgress() とすれば slave は
-        //    自身の実際の位置にそのまま留まる（再配置あり/なしどちらでも有効）。
-        //    これを newRP の差分で算出すると、reposition=false（自動）のとき実際の位置と
-        //    ズレてしまい、slave の railProgress が負になる / 範囲外になり車庫へ TP したり
-        //    消えたりする原因になる。
+        // 7. Re-link reversed chain with per-mode offset
+        //    Manual: offset = master.railProgress - slave.railProgress (actual post-reposition)
+        //    Auto:   offset = -(slave.trainCars * slave.spacing) (fixed negative)
         for (int k = n - 1; k >= 0; k--) {
             TrainServer slave = chain.get(k);
             TrainServer master = chain.get(k + 1);
             TrainAccessor slaveAcc = (TrainAccessor) slave;
-            double offset = ((TrainAccessor) master).manualEnchance$getRailProgress()
-                    - slaveAcc.manualEnchance$getRailProgress();
+            TrainAccessor masterAcc = (TrainAccessor) master;
+
+            double offset;
+            if (reposition) {
+                // Manual: use actual railProgress difference (positions are already set)
+                offset = masterAcc.manualEnchance$getRailProgress()
+                        - slaveAcc.manualEnchance$getRailProgress();
+            } else {
+                // Auto: fixed negative offset = -slaveLength
+                offset = -(slave.trainCars * (double) slave.spacing);
+            }
+
             slaveAcc.manualEnchance$setMasterId(master.id);
             slaveAcc.manualEnchance$setCouplingOffset(offset);
             slaveAcc.manualEnchance$setCouplingMode(false);
@@ -546,7 +563,50 @@ public class CouplingManager {
         }
         saveAll(level);
 
-        LOGGER.info("[turnBackCouplingChain] done: newMaster={}", chain.get(n).id);
+        LOGGER.info("[turnBackCouplingChain] done: newMaster={}, reposition={}", newMaster.id, reposition);
+    }
+
+    /**
+     * doorTarget/doorValue をチェーン全列車に同期する。
+     * 呼び出し元の doorTarget を元に、チェーン内の全列車に反映する。
+     * chain の先頭（masterId == 0）を起点として、master→slave 方向で伝播する。
+     */
+    public static void syncDoorTargetAcrossChain(RailwayData data, long anyTrainId, boolean doorTarget, float doorValue) {
+        // チェーン構築: まずルート（masterId == 0 の列車）を見つける
+        List<TrainServer> chain = new ArrayList<>();
+        // anyTrainId から順に遡ってルートを探す
+        long cur = anyTrainId;
+        for (int i = 0; i < 50; i++) {
+            CouplingInfo info = COUPLING_MAP.get(cur);
+            if (info == null) break;
+            cur = info.masterId;
+            if (cur == 0L) break;
+        }
+        // cur がルート（masterId == 0）
+        TrainServer root = findTrain(data, cur);
+        if (root == null) return;
+        chain.add(root);
+
+        // root → slave1 → ... → slaveN の順にチェーン構築
+        long cursor = root.id;
+        for (int i = 0; i < 50; i++) {
+            Long next = null;
+            for (Map.Entry<Long, CouplingInfo> e : COUPLING_MAP.entrySet()) {
+                if (e.getValue().masterId == cursor) { next = e.getKey(); break; }
+            }
+            if (next == null) break;
+            TrainServer t = findTrain(data, next);
+            if (t == null) break;
+            chain.add(t);
+            cursor = next;
+        }
+
+        // 全列車に doorTarget/doorValue を反映
+        for (TrainServer t : chain) {
+            TrainAccessor a = (TrainAccessor) t;
+            a.manualEnchance$setDoorTarget(doorTarget);
+            a.setDoorValue(doorValue);
+        }
     }
 
     public static void broadcast(ServerLevel level, ResourceLocation packetId, FriendlyByteBuf buf) {

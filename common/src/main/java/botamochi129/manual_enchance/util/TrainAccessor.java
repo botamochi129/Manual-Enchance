@@ -14,6 +14,8 @@ public interface TrainAccessor {
     int getReverser();
     void changeReverser(boolean isUp);
     void setReverser(int value);
+    boolean getReversed();
+    void setReversed(boolean reversed);
     void setManualNotchDirect(int notch);
     float manualEnchance$getDoorValue();
 

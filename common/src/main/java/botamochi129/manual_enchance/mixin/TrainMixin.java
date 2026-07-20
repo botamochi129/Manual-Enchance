@@ -140,6 +140,8 @@ public abstract class TrainMixin implements TrainAccessor {
     @Override public boolean manualEnchance$getDoorTarget() { return this.doorTarget; }
     @Override public void manualEnchance$setDoorTarget(boolean target) { this.doorTarget = target; }
     @Override public void setReverser(int value) { this.reverser = value; }
+    @Override public boolean getReversed() { return this.reversed; }
+    @Override public void setReversed(boolean r) { this.reversed = r; }
     @Override public int getNextStoppingIndex() { return this.nextStoppingIndex; }
     @Override public List<Double> manualEnchance$getDistances() { return this.distances; }
     @Override public double manualEnchance$getRailProgress() { return this.railProgress; }
@@ -443,6 +445,7 @@ public abstract class TrainMixin implements TrainAccessor {
                 TrainAccessor leaderAcc = (TrainAccessor) leader;
                 if (this.manualNotch != leaderAcc.getManualNotch()) leaderAcc.setManualNotchDirect(this.manualNotch);
                 if (this.reverser != leaderAcc.getReverser()) leaderAcc.setReverser(this.reverser);
+                if (this.doorTarget != leaderAcc.manualEnchance$getDoorTarget()) leaderAcc.manualEnchance$setDoorTarget(this.doorTarget);
                 if (Math.abs(this.doorValue - leaderAcc.manualEnchance$getDoorValue()) > 0.01f) leaderAcc.setDoorValue(this.doorValue);
                 if (this.pantographState != leaderAcc.getPantographState()) leaderAcc.setPantographState(this.pantographState);
             }
@@ -1046,6 +1049,17 @@ public abstract class TrainMixin implements TrainAccessor {
         chain.add(self.id);
         manualEnchance$collectSlaves(self.id, chain);
         CouplingManager.turnBackCouplingChain(data, selfServer, serverLevel, Main.COUPLING_SYNC_S2C_PACKET_ID, reposition);
+        // Manual turnback: flip reversed on the new master (chain last element).
+        // Auto turnback: MTR handles reversed via its own terminal detection.
+        if (force && !chain.isEmpty()) {
+            long newMasterId = chain.get(chain.size() - 1);
+            Train newMaster = manualEnchance$findTrainById(world, newMasterId);
+            if (newMaster != null) {
+                TrainAccessor nmAcc = (TrainAccessor) newMaster;
+                nmAcc.setReversed(!newMaster.isReversed());
+                LOGGER.info("[TurnBack] manual: flipped reversed on newMaster={}", newMasterId);
+            }
+        }
         for (Long id : chain) {
             Train t = manualEnchance$findTrainById(world, id);
             if (t != null) ((TrainAccessor) t).manualEnchance$setTurnBackDone(true);
@@ -1101,62 +1115,6 @@ public abstract class TrainMixin implements TrainAccessor {
     }
 
     @Unique
-    double manualEnchance$findAdjacentProgress(Train slave, Train master, Level world) {
-        TrainAccessor slaveAcc = (TrainAccessor) slave;
-        TrainAccessor masterAcc = (TrainAccessor) master;
-        // Master's rear coupler world position; we want the slave's FRONT coupler there
-        // (SLAVE_FRONT_TO_MASTER_REAR), placing the slave directly behind the master.
-        Vec3 masterRear = masterAcc.manualEnchance$getCouplerRearPos();
-        if (masterRear.equals(Vec3.ZERO)) return slaveAcc.manualEnchance$getRailProgress();
-        List<Double> dists = slaveAcc.manualEnchance$getDistances();
-        if (dists == null || dists.isEmpty()) return slaveAcc.manualEnchance$getRailProgress();
-        double maxDistance = dists.get(dists.size() - 1);
-        if (maxDistance <= 0) return slaveAcc.manualEnchance$getRailProgress();
-        int steps = 240;
-
-        // Only search a WINDOW around the slave's CURRENT position. A full-path scan would pick the
-        // global geometric minimum, which on a round-trip (shared track in both directions) can be a
-        // distant point on the return leg and teleport the train there. The correct coupled position
-        // is always near the train's current (station) position, so a ±250 window is more than enough.
-        double current = slaveAcc.manualEnchance$getRailProgress();
-        double lo = Math.max(0.0, current - 250.0);
-        double hi = Math.min(maxDistance, current + 250.0);
-        double step = (hi - lo) / steps;
-        double bestP = slaveAcc.manualEnchance$getRailProgress();
-        double bestDist = Double.MAX_VALUE;
-        for (int i = 0; i <= steps; i++) {
-            double p = lo + step * i;
-            double saved = slaveAcc.manualEnchance$getRailProgress();
-            slaveAcc.setRailProgress(p);
-            Vec3 front = slaveAcc.manualEnchance$getCouplerFrontPos();
-            slaveAcc.setRailProgress(saved);
-            double d = front.distanceTo(masterRear);
-            if (d < bestDist) { bestDist = d; bestP = p; }
-        }
-
-        // Pass 1: refine around the coarse best for accuracy
-        double lo2 = Math.max(0.0, bestP - step);
-        double hi2 = Math.min(maxDistance, bestP + step);
-        double step2 = (hi2 - lo2) / steps;
-        double bestP2 = bestP;
-        double bestDist2 = bestDist;
-        for (int i = 0; i <= steps; i++) {
-            double p = lo2 + step2 * i;
-            double saved = slaveAcc.manualEnchance$getRailProgress();
-            slaveAcc.setRailProgress(p);
-            Vec3 front = slaveAcc.manualEnchance$getCouplerFrontPos();
-            slaveAcc.setRailProgress(saved);
-            double d = front.distanceTo(masterRear);
-            if (d < bestDist2) { bestDist2 = d; bestP2 = p; }
-        }
-
-        LOGGER.debug("[findAdjacentProgress] slave={} master={} bestDist={} targetProgress={} (from {})",
-                slave.id, master.id, String.format("%.2f", bestDist2),
-                String.format("%.2f", bestP2), String.format("%.2f", slaveAcc.manualEnchance$getRailProgress()));
-        return bestP2;
-    }
-
-    @Unique
     private double getNotchMultiplier(int notch) {
         return switch (notch) {
             case 5 -> 1.0; case 4 -> 0.8; case 3 -> 0.6; case 2 -> 0.4; case 1 -> 0.2; case 0 -> 0.0;
@@ -1202,7 +1160,7 @@ public abstract class TrainMixin implements TrainAccessor {
                 this.lastFixedProgress = this.railProgress;
                 return;
             }
-            // Server: forceFinalSpeed (TAIL) sets nextManualProgress from findAdjacentProgress.
+            // Server: forceFinalSpeed (TAIL) sets nextManualProgress from golden rule (master - offset).
             // Use that value (it runs after this redirect in the same tick).
             this.railProgress = this.nextManualProgress;
             this.lastFixedProgress = this.nextManualProgress;
@@ -1257,15 +1215,10 @@ public abstract class TrainMixin implements TrainAccessor {
 
             TrainAccessor frontAcc = (TrainAccessor) frontTrain;
 
-            // マスターの「実際の位置（ワールド座標）」に追従する。
-            // かつては slave = master.railProgress - offset によって計算していたが、
-            // ・ルート起点付近で offset が master.railProgress を超えて負になり、クランプで
-            //   車庫(railProgress=0)に飛ばされていた（乗車時に車庫にテレポートする原因）
-            // ・異ルート間（railProgress の原点が異なる）や折り返し（master が逆走して
-            //   railProgress が減少）ではこの式が成り立たない
-            // そのため、slave のパス上で「master の後端連結器に slave の前端連結器が一致する」
-            // 位置を毎ティック探す。これはフレーム非依存で、負のクランプも発生しない。
-            double targetProgress = manualEnchance$findAdjacentProgress(self, frontTrain, world);
+            // ★ Golden rule: slave.railProgress = master.railProgress - couplingOffset
+            // The offset is set at coupling (actual diff) and at turnback (per spec).
+            // This guarantees monotonic railProgress since master.railProgress only increases (reverser=1).
+            double targetProgress = frontTrain.getRailProgress() - this.manualEnchance$couplingOffset;
             // Safety: clamp to valid path range to prevent depot teleport
             double slaveMaxP = (this.distances != null && !this.distances.isEmpty())
                     ? this.distances.get(this.distances.size() - 1) : Double.MAX_VALUE;
@@ -1288,7 +1241,9 @@ public abstract class TrainMixin implements TrainAccessor {
             // master, the physical arrangement changes and the old offset produces wrong
             // slave positions. Using the actual railProgress difference captures the new
             // arrangement correctly (works for both same-route and cross-route).
-            if (frontTrain.isReversed() != this.manualEnchance$lastReversed) {
+            // Skip on the exact tick that turnBackCouplingChain ran (turnBackDone) to avoid
+            // overwriting the offset that was just correctly set by the turnback.
+            if (frontTrain.isReversed() != this.manualEnchance$lastReversed && !this.manualEnchance$turnBackDone) {
                 double newOffset = frontTrain.getRailProgress() - this.railProgress;
                 this.manualEnchance$couplingOffset = newOffset;
                 java.util.Map<Long, CouplingInfo> cmap = CouplingManager.getCouplingMap();
@@ -1336,8 +1291,29 @@ public abstract class TrainMixin implements TrainAccessor {
                 return;
             }
 
+            // ★ Bidirectional door sync: capture slave's door state BEFORE overwriting.
+            // If the user clicked the door on the slave, slave's value differs from master's.
+            boolean slaveDoorTarget = this.doorTarget;
+            float slaveDoorValue = this.doorValue;
+
             this.doorValue = frontAcc.manualEnchance$getDoorValue();
             this.doorTarget = frontAcc.manualEnchance$getDoorTarget();
+
+            // If slave had a different door state, the user acted on the slave.
+            // Push back to master and sync across the entire chain.
+            if (slaveDoorTarget != this.doorTarget
+                    || Math.abs(slaveDoorValue - this.doorValue) > 0.01f) {
+                frontAcc.manualEnchance$setDoorTarget(slaveDoorTarget);
+                frontAcc.setDoorValue(slaveDoorValue);
+                if (world instanceof ServerLevel serverLevel) {
+                    RailwayData data = RailwayData.getInstance(world);
+                    if (data != null) {
+                        CouplingManager.syncDoorTargetAcrossChain(
+                                data, self.id, slaveDoorTarget, slaveDoorValue);
+                    }
+                }
+            }
+
             this.pantographState = frontAcc.getPantographState();
             this.reverser = frontAcc.getReverser();
             this.manualNotch = frontAcc.getManualNotch();
