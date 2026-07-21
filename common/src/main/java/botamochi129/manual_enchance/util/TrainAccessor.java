@@ -21,10 +21,12 @@ public interface TrainAccessor {
 
     int getNextStoppingIndex();
     List<Double> manualEnchance$getDistances();
+    int getRepeatIndex1();
     double manualEnchance$getRailProgress();
 
     void setRailProgress(double railProgress);
     void setSpeed(float speed);
+    float getSpeed();
     void setDoorValue(float doorValue);
 
     int getPantographState();

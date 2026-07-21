@@ -44,6 +44,9 @@ public abstract class TrainMixin implements TrainAccessor {
     @Shadow public abstract float getModelZOffset();
     @Shadow @Final public List<PathData> path;
     @Shadow @Final public int maxManualSpeed;
+    @Shadow protected int repeatIndex1;
+    @Shadow protected int repeatIndex2;
+    @Shadow protected abstract boolean isRepeat();
 
     @Shadow protected abstract double getRailProgress(int car, int trainSpacing);
 
@@ -59,14 +62,14 @@ public abstract class TrainMixin implements TrainAccessor {
     @Unique private int manualEnchance$coupleWaitTicks = 0;
     @Unique private int manualEnchance$lastCouplingPathIndex = -1;
 
-    // 状態
+    // 状慁E
     private float nextManualSpeed = 0.0f;
     private double nextManualProgress = 0.0;
     private boolean isInsideDepot = false;
     private boolean hasLeftDepot = false;
     private double lastFixedProgress = -1;
 
-    // 1:前進(F), 0:中立(N), -1:後進(B)
+    // 1:前進(F), 0:中竁EN), -1:後進(B)
     private int reverser = 1;
 
     @Unique private int pantographState = 0;
@@ -87,7 +90,7 @@ public abstract class TrainMixin implements TrainAccessor {
     // Auto-coupling stop-position override: when this (auto) train is the SECOND arrival at a
     // coupling station, it decelerates to and stops at the coupled position (just behind the
     // already-stopped master) instead of its natural platform position. This is the "true
-    // deceleration stop" — manual driving is excluded (see updateCoupleStopOverride).
+    // deceleration stop"  Emanual driving is excluded (see updateCoupleStopOverride).
     @Unique private boolean manualEnchance$coupleStopActive = false;
     @Unique private double manualEnchance$coupleStopTarget = 0.0;
 
@@ -101,21 +104,34 @@ public abstract class TrainMixin implements TrainAccessor {
     @Unique private boolean manualEnchance$lastReversed = false;
     @Unique private boolean manualEnchance$reversedInitialized = false;
 
-    // Tracks whether the train was off-route while coupled. When isOnRoute transitions from
-    // false→true, this indicates a terminal reset — the turnback moment for non-repeat routes
-    // where MTR doesn't toggle `reversed`.
-    @Unique private boolean manualEnchance$wasOffRoute = false;
-
     // Set when the train is stopped at a turnback node and the player opens doors.
     // The turnback only fires when this flag is true AND doors are subsequently closed,
     // ensuring the player can open doors at the terminal before the role swap occurs.
-    @Unique private boolean manualEnchance$doorsOpenedAtTerminal = false;
 
     // Cached world from the HEAD inject, used by @Redirect methods that don't receive world param.
     @Unique private Level manualEnchance$cachedWorld = null;
 
     @Inject(method = "changeManualSpeed", at = @At("HEAD"), cancellable = true)
     public void onChangeManualSpeed(boolean isAccelerate, CallbackInfoReturnable<Boolean> cir) {
+        // Slave: forward input to master (only master can control notch/reverser/pantograph)
+        if (this.manualEnchance$masterId != 0L) {
+            Train master = manualEnchance$findTrainById(this.manualEnchance$cachedWorld, this.manualEnchance$masterId);
+            if (master != null) {
+                TrainAccessor masterAcc = (TrainAccessor) master;
+                if (isAccelerate) {
+                    if (masterAcc.manualEnchance$getDoorValue() <= 0.01F && masterAcc.getManualNotch() < 5) {
+                        masterAcc.setManualNotchDirect(masterAcc.getManualNotch() + 1);
+                    }
+                } else {
+                    if (masterAcc.getManualNotch() > -9) {
+                        masterAcc.setManualNotchDirect(masterAcc.getManualNotch() - 1);
+                    }
+                }
+            }
+            cir.setReturnValue(true); // Cancel local processing
+            return;
+        }
+        
         if (isAccelerate) {
             if (this.doorValue <= 0.01F && this.manualNotch < 5) {
                 this.manualNotch++;
@@ -134,6 +150,7 @@ public abstract class TrainMixin implements TrainAccessor {
     }
 
     @Override public int getManualNotch() { return this.manualNotch; }
+    @Override public float getSpeed() { return this.speed; }
     @Override public boolean getIsCurrentlyManual() { return this.isCurrentlyManual; }
     @Override public int getReverser() { return this.reverser; }
     @Override public float manualEnchance$getDoorValue() { return this.doorValue; }
@@ -144,9 +161,21 @@ public abstract class TrainMixin implements TrainAccessor {
     @Override public void setReversed(boolean r) { this.reversed = r; }
     @Override public int getNextStoppingIndex() { return this.nextStoppingIndex; }
     @Override public List<Double> manualEnchance$getDistances() { return this.distances; }
+    @Override public int getRepeatIndex1() { return this.repeatIndex1; }
     @Override public double manualEnchance$getRailProgress() { return this.railProgress; }
     @Override public int getPantographState() { return pantographState; }
-    @Override public void setPantographState(int state) { this.pantographState = state % 4; }
+    @Override public void setPantographState(int state) {
+        // Slave: forward input to master (only master can control pantograph)
+        if (this.manualEnchance$masterId != 0L) {
+            Train master = manualEnchance$findTrainById(this.manualEnchance$cachedWorld, this.manualEnchance$masterId);
+            if (master != null) {
+                TrainAccessor masterAcc = (TrainAccessor) master;
+                masterAcc.setPantographState(state);
+            }
+            return;
+        }
+        this.pantographState = state % 4; 
+    }
     @Override public void setRollsignIndex(String key, int index) { rollsignIndices.put(key, index); }
     @Override public int getRollsignIndex(String key) { return rollsignIndices.getOrDefault(key, 0); }
     @Override public float getRollsignOffset(String key) { return rollsignOffsets.getOrDefault(key, 0.0f); }
@@ -158,8 +187,6 @@ public abstract class TrainMixin implements TrainAccessor {
     @Override public List<String> getRollsignNames(String key) { return rollsignNamesMap.getOrDefault(key, java.util.Collections.emptyList()); }
     @Override public float manualEnchance$getBCPressure() { return this.manualEnchance$bcPressure; }
     @Override public void manualEnchance$setBCPressure(float pressure) { this.manualEnchance$bcPressure = pressure; }
-    @Override public boolean manualEnchance$getDoorsOpenedAtTerminal() { return this.manualEnchance$doorsOpenedAtTerminal; }
-    @Override public void manualEnchance$setDoorsOpenedAtTerminal(boolean opened) { this.manualEnchance$doorsOpenedAtTerminal = opened; }
     @Override public boolean manualEnchance$isOnRoute() { return this.isOnRoute; }
     @Override public void manualEnchance$setOnRoute(boolean onRoute) { this.isOnRoute = onRoute; }
     @Override public boolean manualEnchance$isWaitingForCouple() { return this.manualEnchance$waitingForCouple; }
@@ -177,6 +204,7 @@ public abstract class TrainMixin implements TrainAccessor {
     @Override public boolean manualEnchance$getTurnBackDone() { return this.manualEnchance$turnBackDone; }
     @Override public void manualEnchance$setTurnBackDone(boolean done) { this.manualEnchance$turnBackDone = done; }
     @Override public Vec3 callGetRoutePosition(int car, int trainSpacing) {
+        if (this.path == null || this.path.isEmpty()) return Vec3.ZERO;
         final double tempRailProgress = Math.max(getRailProgress(car, trainSpacing) - getModelZOffset(), 0);
         final int index = this.getIndex(tempRailProgress, false);
         return path.get(index).rail.getPosition(tempRailProgress - (index == 0 ? 0 : distances.get(index - 1))).add(0, transportMode.railOffset, 0);
@@ -244,7 +272,7 @@ public abstract class TrainMixin implements TrainAccessor {
         return pos == null ? Vec3.ZERO : pos;
     }
 
-    // 連結器位置（reversed非依存、常に car 0 が front、car trainCars が rear）
+    // 連結器位置�E�Eeversed非依存、常に car 0 ぁEfront、car trainCars ぁErear�E�E
     @Override
     public Vec3 manualEnchance$getCouplerFrontPos() {
         return manualEnchance$getCarPosition(0);
@@ -264,7 +292,7 @@ public abstract class TrainMixin implements TrainAccessor {
         return pos == null ? Vec3.ZERO : pos;
     }
 
-    // ★ 進行方向ベクトルの取得
+    // ☁E進行方向�Eクトルの取征E
     @Override
     public double manualEnchance$getRailProgressAtCar(int car, double longitudinalOffsetBlocks) {
         Train self = (Train) (Object) this;
@@ -276,12 +304,13 @@ public abstract class TrainMixin implements TrainAccessor {
 
     @Unique
     public Vec3 manualEnchance$getDirectionVector(double progress) {
+        if (this.path == null || this.path.isEmpty()) return Vec3.directionFromRotation(0,-90);
         Train self = (Train)(Object)this;
         double p1 = Math.max(progress - this.getModelZOffset(), 0);
         double p2 = p1 + 0.1;
 
         int index1 = self.getIndex(p1, false);
-        if (this.path == null || this.path.isEmpty() || index1 >= this.path.size()) return Vec3.directionFromRotation(0,-90);
+        if (index1 >= this.path.size()) return Vec3.directionFromRotation(0,-90);
         double offset1 = (index1 == 0) ? 0 : this.distances.get(index1 - 1);
         Vec3 pos1 = this.path.get(index1).rail.getPosition(p1 - offset1);
 
@@ -294,7 +323,7 @@ public abstract class TrainMixin implements TrainAccessor {
         return dir.lengthSqr() > 0 ? dir.normalize() : Vec3.directionFromRotation(0,-90);
     }
 
-    // ★ グループの最先頭（リーダー）列車を探すヘルパー
+    // ☁Eグループ�E最先頭�E�リーダー�E��E車を探す�Eルパ�E
     @Unique
     private Train manualEnchance$findLeaderTrain(Level world) {
         Train current = (Train)(Object)this;
@@ -322,8 +351,52 @@ public abstract class TrainMixin implements TrainAccessor {
         return null;
     }
 
+    /**
+     * Check if this train and another train are on the same shared track section.
+     * Uses PathData.savedRailBaseId to verify both trains are on physically connected rails.
+     * Cross-route coupling is only allowed when both trains share the same savedRailBaseId chain.
+     */
+    @Unique
+    private boolean manualEnchance$isOnSharedSection(TrainAccessor other) {
+        Train self = (Train)(Object)this;
+        if (self.path == null || self.path.isEmpty()) return false;
+        
+        // Get other train's path (need to access via reflection since TrainAccessor doesn't expose path)
+        Train otherTrain = (Train)(Object)other;
+        if (otherTrain.path == null || otherTrain.path.isEmpty()) return false;
+        
+        // Get current path index for both trains
+        int selfIdx = self.getIndex(this.railProgress, false);
+        int otherIdx = otherTrain.getIndex(other.manualEnchance$getRailProgress(), false);
+        
+        if (selfIdx < 0 || selfIdx >= self.path.size()) return false;
+        if (otherIdx < 0 || otherIdx >= otherTrain.path.size()) return false;
+        
+        // Check if both path segments have the same savedRailBaseId
+        long selfBaseId = self.path.get(selfIdx).savedRailBaseId;
+        long otherBaseId = otherTrain.path.get(otherIdx).savedRailBaseId;
+        
+        return selfBaseId == otherBaseId && selfBaseId != 0L;
+    }
+
     @Override
     public void changeReverser(boolean isUp) {
+        // Slave: forward input to master (only master can control reverser)
+        if (this.manualEnchance$masterId != 0L) {
+            Train master = manualEnchance$findTrainById(this.manualEnchance$cachedWorld, this.manualEnchance$masterId);
+            if (master != null) {
+                TrainAccessor masterAcc = (TrainAccessor) master;
+                if (masterAcc.getSpeed() < 0.0001F) {
+                    if (isUp) {
+                        if (masterAcc.getReverser() < 1) masterAcc.setReverser(masterAcc.getReverser() + 1);
+                    } else {
+                        if (masterAcc.getReverser() > -1) masterAcc.setReverser(masterAcc.getReverser() - 1);
+                    }
+                }
+            }
+            return;
+        }
+        
         if (this.speed < 0.0001F) {
             if (isUp) {
                 if (this.reverser < 1) this.reverser++;
@@ -333,28 +406,18 @@ public abstract class TrainMixin implements TrainAccessor {
         }
     }
 
-    @Override
-    public void manualEnchance$syncPathFrom(TrainServer master) {
-        Train self = (Train)(Object)this;
-        self.path.clear();
-        self.path.addAll(master.path);
-        this.distances.clear();
-        this.distances.addAll(((TrainAccessor)master).manualEnchance$getDistances());
-    }
-
     @Inject(method = "simulateTrain", at = @At("HEAD"))
     private void calculateManualPhysics(Level world, float ticksElapsed, Depot depot, CallbackInfo ci) {
         this.manualEnchance$cachedWorld = world;
         Train self = (Train)(Object)this;
 
-        // When waiting for a coupling partner OR already coupled as a slave, freeze
-        // elapsedDwellTicks BEFORE MTR's departure check (line 484) so the train never
-        // departs independently.  For a waiting train this prevents premature departure;
-        // for a coupled slave this prevents startUp() from being called (which would reset
-        // elapsedDwellTicks=0, nextStoppingIndex, reversed, doorTarget).
+        // When waiting for a coupling partner, freeze elapsedDwellTicks BEFORE MTR's departure
+        // check so the train never departs before the second train arrives.  Once coupling
+        // succeeds (waitingForCouple=false), the freeze is released and the train departs normally.
+        // Master/slave state is synced by forceFinalSpeed regardless of elapsedDwellTicks.
         if (!this.isCurrentlyManual && this.path != null && this.nextStoppingIndex >= 0
                 && this.nextStoppingIndex < this.path.size()
-                && (this.manualEnchance$waitingForCouple || this.manualEnchance$masterId != 0L)) {
+                && this.manualEnchance$waitingForCouple) {
             int dwellTicks = this.path.get(this.nextStoppingIndex).dwellTime * 10;
             int maxDoorMoveTime = Math.min(64, dwellTicks / 2 - 20);
             float doorCloseThreshold = (float)(dwellTicks - 20) - maxDoorMoveTime;
@@ -380,15 +443,36 @@ public abstract class TrainMixin implements TrainAccessor {
             Train master = manualEnchance$findTrainById(world, this.manualEnchance$masterId);
             if (master != null) {
                 TrainAccessor masterAcc = (TrainAccessor) master;
+                
+                // Golden rule: physical proximity (3D distance) is the definitive proof of shared track.
+                // Early uncouple if trains have physically diverged beyond threshold.
+                if (CouplingManager.getCouplerDistanceMin((TrainAccessor) this, masterAcc) > COUPLING_MAX_DIVERGE_DISTANCE) {
+                    if (world instanceof ServerLevel serverLevel) {
+                        RailwayData data = RailwayData.getInstance(world);
+                        if (data != null) {
+                            CouplingManager.uncouple(data, self.id, serverLevel, Main.COUPLING_SYNC_S2C_PACKET_ID);
+                            LOGGER.warn("[SlaveSync] slave {} physically diverged from master {} (dist > {}), auto-uncoupled",
+                                    self.id, master.id, COUPLING_MAX_DIVERGE_DISTANCE);
+                        }
+                    }
+                    return;
+                }
+                
                 // Sync all state from master: position, speed, direction, and controls.
-                // The slave NEVER pushes its own controls to master — doing so would allow
+                // The slave NEVER pushes its own controls to master  Edoing so would allow
                 // driving from the slave cab and would overwrite master's correct manualNotch
                 // with MTR-modified slave values (e.g. -2 from door open).
                 this.manualNotch = masterAcc.getManualNotch();
-                this.doorValue = masterAcc.manualEnchance$getDoorValue();
-                this.doorTarget = masterAcc.manualEnchance$getDoorTarget();
-                this.pantographState = masterAcc.getPantographState();
                 this.reverser = masterAcc.getReverser();
+                this.pantographState = masterAcc.getPantographState();
+                
+                // ☁EDoor sync: only sync doors when stopped (speed == 0).
+                // This prevents "doors opening while moving" bugs.
+                if (master.getSpeed() <= 0.001F) {
+                    this.doorValue = masterAcc.manualEnchance$getDoorValue();
+                    this.doorTarget = masterAcc.manualEnchance$getDoorTarget();
+                }
+                
                 boolean sameRoute = (self instanceof TrainServer selfServer)
                         && ((TrainServerAccessor) selfServer).getRouteId() == ((TrainServerAccessor) master).getRouteId();
                 this.nextManualProgress = master.getRailProgress() - this.manualEnchance$couplingOffset;
@@ -412,7 +496,7 @@ public abstract class TrainMixin implements TrainAccessor {
                     this.nextStoppingIndex = masterAcc.getNextStoppingIndex();
                 }
                 this.isCurrentlyManual = masterAcc.getIsCurrentlyManual();
-                this.doorTarget = masterAcc.manualEnchance$getDoorTarget();
+                // Door target already synced above with speed gate
             } else {
                 // Client-side: RailwayData.getInstance() returns null (server-only), so
                 // findTrainById cannot locate the master. We MUST preserve the current
@@ -438,7 +522,7 @@ public abstract class TrainMixin implements TrainAccessor {
         // bumper-to-bumper behind the waiting master (true deceleration stop, not a post-stop teleport).
         manualEnchance$updateCoupleStopOverride(world, depot);
 
-        // ★ 総括制御ロジック (手動運転時の逆伝播) — マスター列車のみ実行
+        // ☁E総括制御ロジチE�� (手動運転時�E送E��播)  Eマスター列車�Eみ実衁E
         if (this.isCurrentlyManual) {
             Train leader = manualEnchance$findLeaderTrain(world);
             if (leader != null && leader != self) {
@@ -451,19 +535,19 @@ public abstract class TrainMixin implements TrainAccessor {
             }
         }
 
-        // --- 自動運転: MTRの物理に完全委任 ---
+        // --- 自動運転: MTRの物琁E��完�E委任 ---
         if (!this.isCurrentlyManual) {
             this.nextManualSpeed = this.speed;
             this.nextManualProgress = this.railProgress;
             this.lastFixedProgress = this.railProgress;
-            // ★ Do NOT force reverser=1 here. MTR controls reverser for auto turnback;
+            // ☁EDo NOT force reverser=1 here. MTR controls reverser for auto turnback;
             // forcing it to 1 prevents MTR from setting reverser=0 (neutral) at terminals,
             // which is how MTR triggers the turnback mechanism.
             this.manualEnchance$bcPressure = 0.0f;
             return;
         }
 
-        // ★ Prevent MTR from auto-switching manual→auto after manualToAutomaticTime
+        // ☁EPrevent MTR from auto-switching manual→auto after manualToAutomaticTime
         if (self instanceof TrainServer selfServer) {
             ((TrainServerAccessor) selfServer).setManualCoolDown(0);
         }
@@ -503,7 +587,14 @@ public abstract class TrainMixin implements TrainAccessor {
 
         float maxAllowedBPT = this.maxManualSpeed / 2.4f;
 
-        if (ticksElapsed > 0) {
+        // ★ ドア開中は物理計算スキップ（発車防止）
+        if (this.doorTarget || this.doorValue > 0.01F) {
+            this.nextManualSpeed = 0;
+            this.speed = 0;
+            this.nextManualProgress = this.railProgress;
+            this.lastFixedProgress = this.railProgress;
+            this.manualNotch = -2;
+        } else if (ticksElapsed > 0) {
             // Drive force (notch 1-5)
             float driveMultiplier = (this.manualNotch > 0) ? (this.manualNotch / 5.0f) : 0.0f;
             float driveForce = driveMultiplier * this.accelerationConstant * ticksElapsed;
@@ -513,7 +604,7 @@ public abstract class TrainMixin implements TrainAccessor {
             // Brake force (proportional to BC pressure, stronger than power)
             float brakeDecel = this.manualEnchance$bcPressure * 2.0f * this.accelerationConstant * ticksElapsed;
 
-            // Slope gravity — always physical, direction-independent of reverser
+            // Slope gravity  Ealways physical, direction-independent of reverser
             double y1 = getYAt(this.railProgress);
             double y2 = getYAt(this.railProgress + 0.1);
             double slope = (y2 - y1) / 0.1;
@@ -538,7 +629,7 @@ public abstract class TrainMixin implements TrainAccessor {
         double moveDelta = this.nextManualSpeed * ticksElapsed;
         this.nextManualProgress = this.lastFixedProgress + (this.reverser == -1 ? -moveDelta : moveDelta);
 
-        // ★ Residual pressure stop penalty — abrupt stop if BC > 95% at very low speed
+        // ☁EResidual pressure stop penalty  Eabrupt stop if BC > 95% at very low speed
         if (this.nextManualSpeed < 0.01f) {
             if (this.manualEnchance$bcPressure > 0.95f) {
                 this.nextManualSpeed = 0.0f;
@@ -549,44 +640,46 @@ public abstract class TrainMixin implements TrainAccessor {
             this.manualEnchance$abruptStop = false;
         }
 
-        // 折り返しノードの処理など
-        int currentIndex = self.getIndex(this.railProgress, false);
-        if (currentIndex >= 0 && currentIndex < path.size() - 1) {
-            double nodeProgress = distances.get(currentIndex);
-            if (path.get(currentIndex + 1).isOppositeRail(path.get(currentIndex))) {
-                // 折り返し検知: (a) ノードをこのティックで通過した、または
-                // (b) ノードの直前で停止した（プラットフォームがノードと一致する終端駅など）。
-                // 従来は (a) のみだったが、列車はノードちょうどで止まるため (a) が発火せず、
-                // 折り返さずにそのまま止まり続けていた。
-                boolean crossing = this.lastFixedProgress <= nodeProgress && this.nextManualProgress > nodeProgress;
-                boolean stoppedAtNode = this.nextManualSpeed < 0.1F
-                        && this.railProgress >= nodeProgress - 3.0
-                        && this.nextManualProgress >= nodeProgress - 3.0;
-                // Track if doors were opened at the terminal (turnback only fires after
-                // the player opens doors and then closes them, not immediately on arrival).
-                if (stoppedAtNode && this.doorTarget) {
-                    this.manualEnchance$doorsOpenedAtTerminal = true;
+        // ★ MTR本家と完全に同一条件で折り返し検知（手動運転時のみ）
+        if (this.isCurrentlyManual && this.speed <= 0.001F && this.isOnRoute
+                && this.isRepeat() && this.getIndex(this.railProgress, false) >= this.repeatIndex2
+                && this.distances.size() > this.repeatIndex1) {
+
+            LOGGER.debug("[ManualTB] turnback condition met id={} speed={} railProgress={} idx={} rptIdx2={}",
+                    self.id, this.speed, String.format("%.1f", this.railProgress),
+                    this.getIndex(this.railProgress, false), this.repeatIndex2);
+
+            if (world instanceof ServerLevel serverLevel && self instanceof TrainServer selfServer
+                    && this.manualEnchance$masterId == 0L
+                    && manualEnchance$chainHasSlaves(self.id)) {
+                LOGGER.info("[ManualTB] CALLING tryTurnBackCouplingChain for master={}", self.id);
+                manualEnchance$tryTurnBackCouplingChain(world, serverLevel, self, selfServer, true, true);
+                this.nextManualProgress = this.railProgress;
+                this.lastFixedProgress = this.railProgress;
+                this.nextManualSpeed = 0;
+                this.speed = 0;
+                this.manualNotch = 0;
+                LOGGER.info("[ManualTB] after turnback: masterId={} railProgress={} speed={}",
+                        this.manualEnchance$masterId, String.format("%.1f", this.railProgress), this.speed);
+            } else {
+                // 分岐2: 手動ソロ → MTR vanilla 同等の折り返しを自力実行
+                if (this.path.get(this.repeatIndex2).isOppositeRail(this.path.get(this.repeatIndex1))) {
+                    this.railProgress = this.distances.get(Math.max(0, this.repeatIndex1 - 1)) + this.trainCars * this.spacing;
+                    this.reversed = !this.reversed;
+                } else {
+                    this.railProgress = this.distances.get(this.repeatIndex1);
                 }
-                boolean canTurnBack = stoppedAtNode && this.manualEnchance$doorsOpenedAtTerminal;
-                if (crossing || canTurnBack) {
-                    this.nextManualSpeed = 0;
-                    this.speed = 0;
-                    this.manualNotch = 0;
-                    this.nextManualProgress = nodeProgress;
-                    // 折り返し: master/slave を入れ替え、編成を再配置する。
-                    // リバーサーは 1（前進）のまま変えず、reversed も切り替えない（折り返しは
-                    // ルートに組み込まれているため、ルートに沿って前進するだけ）。
-                    // 手動運転: 自前で位置を再配置 (reposition=true)。自動運転は別ブロックで処理。
-                    if (world instanceof ServerLevel serverLevel && self instanceof TrainServer selfServer) {
-                        manualEnchance$tryTurnBackCouplingChain(world, serverLevel, self, selfServer, true, true);
-                        // ★ reposition 後に nextManualProgress/lastFixedProgress を更新する。
-                        // しないと redirectRailProgressPut が railProgress を nodeProgress に
-                        // 上書きして再配置が無効化され、列車がチカチカする。
-                        this.nextManualProgress = this.railProgress;
-                        this.lastFixedProgress = this.railProgress;
-                        this.manualEnchance$doorsOpenedAtTerminal = false;
-                    }
-                }
+
+                // ★ MTRがやらない追加リセット（MTR vanilla 互換のため必須）
+                this.nextStoppingIndex = this.repeatIndex1;
+                this.elapsedDwellTicks = 0.0F;
+
+                // redirectRailProgressPut の上書きを正しい値にする
+                this.nextManualProgress = this.railProgress;
+                this.lastFixedProgress = this.railProgress;
+                this.nextManualSpeed = 0;
+                this.speed = 0;
+                this.manualNotch = 0;
             }
         }
 
@@ -646,7 +739,7 @@ public abstract class TrainMixin implements TrainAccessor {
         if (!(self instanceof TrainServer selfServer)) return;
 
         // Route-based coupling/uncoupling is for AUTO driving only. When the player is driving
-        // manually, getting close to the partner must NOT auto-couple — manual coupling is done
+        // manually, getting close to the partner must NOT auto-couple  Emanual coupling is done
         // via the manual command (attempt_coupling). Without this guard, pulling up to a station
         // that has a COUPLE action would couple automatically even in manual control.
         if (this.isCurrentlyManual) return;
@@ -667,7 +760,7 @@ public abstract class TrainMixin implements TrainAccessor {
         // its path. This is what lets a round-trip route COUPLE at a station on the outbound leg
         // and UNCOUPLE at the SAME station on the inbound leg (the two visits use different path
         // indices, so they are treated as separate stops). Coupling/uncoupling is only ever
-        // performed when the train is stopped at the station (speed == 0) — never while running.
+        // performed when the train is stopped at the station (speed == 0)  Enever while running.
         if (this.nextStoppingIndex != manualEnchance$lastCouplingPathIndex) {
             manualEnchance$lastCouplingPathIndex = this.nextStoppingIndex;
             manualEnchance$routeCouplingDone = false;
@@ -694,7 +787,7 @@ public abstract class TrainMixin implements TrainAccessor {
         // --- UNCOUPLE (only meaningful when already coupled) ---
         // Priority over COUPLE: if the train is part of a coupled chain at this stop, detach it.
         // The stop is then "consumed" so it will not immediately re-couple here.
-        // MUST be stopped at the station (speed == 0, doors open) — never uncouple while running.
+        // MUST be stopped at the station (speed == 0, doors open)  Enever uncouple while running.
         if (doUncouple) {
             if (this.elapsedDwellTicks <= 0 || Math.abs(this.speed) > 0.05F) {
                 // Still approaching / dwelling with doors not yet open / not at rest: wait.
@@ -737,7 +830,7 @@ public abstract class TrainMixin implements TrainAccessor {
                 return;
             }
             // Not coupled and nothing to detach. If this stop is a COUPLE+UNCOUPLE (BOTH) stop on a
-            // round-trip, then "not coupled yet" means we are on the OUTBOUND visit — fall through
+            // round-trip, then "not coupled yet" means we are on the OUTBOUND visit  Efall through
             // to the COUPLE logic below instead of consuming the stop. For a pure-UNCOUPLE stop with
             // nothing to detach, consume the stop so we don't try to couple here.
             if (doCouple) {
@@ -775,7 +868,7 @@ public abstract class TrainMixin implements TrainAccessor {
                 TrainAccessor selfAcc = (TrainAccessor) self;
                 TrainAccessor targetAcc = (TrainAccessor) target;
 
-                // Don't auto-couple to a train that is being driven manually — manual coupling
+                // Don't auto-couple to a train that is being driven manually  Emanual coupling
                 // is done via the V-key command, not by the auto route-coupling system.
                 if (targetAcc.getIsCurrentlyManual()) return;
 
@@ -793,11 +886,16 @@ public abstract class TrainMixin implements TrainAccessor {
                 // doors open) AND at rest. This prevents "coupled while running / not at a station".
                 // Coupling is only allowed on the section where the routes physically share track,
                 // which here means both trains are stopped together at the same station.
+
+                // First arrival (target) should be waiting with doors open
+                boolean targetWaiting = targetAcc.manualEnchance$isWaitingForCouple();
+                boolean targetStopped = Math.abs(target.getSpeed()) <= 0.05F && target.getElapsedDwellTicks() > 0;
+
                 if (this.elapsedDwellTicks <= 0) {
                     this.manualEnchance$waitingForCouple = true;
                     return;
                 }
-                if (Math.abs(this.speed) > 0.05F || Math.abs(target.getSpeed()) > 0.05F) {
+                if (Math.abs(this.speed) > 0.05F || !targetStopped) {
                     this.manualEnchance$waitingForCouple = true;
                     return;
                 }
@@ -808,7 +906,6 @@ public abstract class TrainMixin implements TrainAccessor {
                     // coupling geometrically correct (slave behind master) for station AND siding pickups.
                     TrainServer slaveT = target;
                     TrainServer masterT = (TrainServer) self;
-                    boolean targetWaiting = targetAcc.manualEnchance$isWaitingForCouple();
                     boolean selfWaiting = selfAcc.manualEnchance$isWaitingForCouple();
                     if (targetWaiting && !selfWaiting) {
                         slaveT = (TrainServer) self;
@@ -823,10 +920,10 @@ public abstract class TrainMixin implements TrainAccessor {
 
                     // At a shared station both trains stop at their normal platform positions, which
                     // leaves a gap too large for applyNaturalCoupling's proximity gate.
-                    // Do NOT teleport the slave — that skips the natural coupling process.
+                    // Do NOT teleport the slave  Ethat skips the natural coupling process.
                     // Instead, the second arrival should decelerate to the coupled position via
                     // updateCoupleStopOverride before it stops. If the gap is still too large
-                    // (e.g. both already stopped), just wait — the trains will couple when close
+                    // (e.g. both already stopped), just wait  Ethe trains will couple when close
                     // enough, or give up after coupleWaitTicks timeout.
 
                     boolean coupled = CouplingManager.applyNaturalCoupling(
@@ -845,7 +942,7 @@ public abstract class TrainMixin implements TrainAccessor {
                 }
             }
 
-            // No target / coupling failed → cap elapsedDwellTicks just below the door-close
+            // No target / coupling failed ↁEcap elapsedDwellTicks just below the door-close
             // threshold so doors stay open for passengers, but the train never departs.
             // MTR opens doors when elapsedDwellTicks >= 20.0f, closes when >= dwellTicks-20-maxDoorMoveTime.
             this.manualEnchance$coupleWaitTicks++;
@@ -860,10 +957,14 @@ public abstract class TrainMixin implements TrainAccessor {
                 int dwellTicks = this.path.get(this.nextStoppingIndex).dwellTime * 10;
                 int maxDoorMoveTime = Math.min(64, dwellTicks / 2 - 20);
                 float doorCloseThreshold = (float)(dwellTicks - 20) - maxDoorMoveTime;
+                // Freeze elapsedDwellTicks to keep doors open while waiting for coupling partner
                 if (this.elapsedDwellTicks < doorCloseThreshold) {
-                    // Doors are open and will stay open — let the timer advance naturally.
+                    // Doors are open and will stay open  Elet the timer advance naturally until near threshold
+                    if (this.elapsedDwellTicks >= doorCloseThreshold - 5) {
+                        this.elapsedDwellTicks = doorCloseThreshold - 1;
+                    }
                 } else {
-                    // Doors would close or train would depart — freeze just below threshold.
+                    // Doors would close or train would depart  Efreeze just below threshold.
                     this.elapsedDwellTicks = doorCloseThreshold - 1;
                 }
             }
@@ -888,9 +989,9 @@ public abstract class TrainMixin implements TrainAccessor {
     private void manualEnchance$updateCoupleStopOverride(Level world, Depot depot) {
         manualEnchance$coupleStopActive = false;
         Train self = (Train)(Object)this;
-        // Manual driving is excluded by design — only AUTO trains pre-decelerate to the coupled stop.
+        // Manual driving is excluded by design  Eonly AUTO trains pre-decelerate to the coupled stop.
         if (this.isCurrentlyManual) return;
-        // Already part of a chain → follows master, no override needed.
+        // Already part of a chain ↁEfollows master, no override needed.
         if (this.manualEnchance$masterId != 0L) return;
         if (!this.isOnRoute) return;
         if (this.path == null || this.nextStoppingIndex < 0 || this.nextStoppingIndex >= this.path.size()) return;
@@ -914,7 +1015,7 @@ public abstract class TrainMixin implements TrainAccessor {
         RouteCouplingStore.RouteCouplingAction act = RouteCouplingStore.getAction(routeId, stationIdx);
         if (act == null || !act.doCouple) return;
         // If coupling was already attempted and gave up at this stop, don't keep holding the train
-        // at the coupled position — let it proceed to its natural platform.
+        // at the coupled position  Elet it proceed to its natural platform.
         if (manualEnchance$routeCouplingDone) return;
 
         // Partner already stopped at this same station stop = the future master.
@@ -949,9 +1050,10 @@ public abstract class TrainMixin implements TrainAccessor {
         // distant point on a round-trip path.
         double masterLength = partner.trainCars * (double) partner.spacing;
         double adj = naturalStop - masterLength;
-        // Safety: only stop earlier than the natural platform, within the path, and not behind us.
-        if (adj >= naturalStop || adj < 0.0) return;
-        // If we've already passed the coupled stop position, don't engage override —
+        // Safety: only stop earlier than the natural platform, within the path.
+        // Allow adj < 0 (stop before platform start) - clamp downstream by min-RP guard.
+        if (adj >= naturalStop) return;
+        // If we've already passed the coupled stop position, don't engage override  E
         // it's too late to decelerate to it (the distToStop check above used naturalStop,
         // but the actual target is adj which is earlier).
         if (this.railProgress >= adj) return;
@@ -966,7 +1068,7 @@ public abstract class TrainMixin implements TrainAccessor {
         for (Siding siding : data.sidings) {
             for (TrainServer ts : ((SidingAccessor) siding).getTrains()) {
                 if (ts.id == excludeId) continue;
-                // Skip already-coupled trains — they are following their master and
+                // Skip already-coupled trains  Ethey are following their master and
                 // must not be selected as a coupling target.
                 if (((TrainAccessor) ts).manualEnchance$getMasterId() != 0L) continue;
                 int otherNextStop = ((TrainAccessor) ts).getNextStoppingIndex();
@@ -1025,8 +1127,10 @@ public abstract class TrainMixin implements TrainAccessor {
         if (!self.path.get(curIdx + 1).isOppositeRail(self.path.get(curIdx))) return;
 
         double distToNode = Math.abs(this.railProgress - nodeP);
-        // Left the node well behind → allow the next turnback to fire.
-        if (distToNode > 20.0) {
+        // Left the node well behind ↁEallow the next turnback to fire.
+        // Only reset for uncoupled trains; coupled chains must keep turnBackDone
+        // to prevent ping-pong when the new master sits at a different route's node.
+        if (distToNode > 20.0 && this.manualEnchance$masterId == 0L && !manualEnchance$chainHasSlaves(self.id)) {
             this.manualEnchance$turnBackDone = false;
             return;
         }
@@ -1044,11 +1148,14 @@ public abstract class TrainMixin implements TrainAccessor {
         RailwayData data = RailwayData.getInstance(world);
         if (data == null) return;
         LOGGER.info("[TurnBack] swapping coupling chain for master={} (reposition={}, force={})", self.id, reposition, force);
-        // Mark the whole chain so the swapped-in master does not immediately re-fire.
         java.util.List<Long> chain = new java.util.ArrayList<>();
         chain.add(self.id);
         manualEnchance$collectSlaves(self.id, chain);
+        LOGGER.info("[TurnBack] chain before turnback={} masterId={} railProgress={}",
+                chain, this.manualEnchance$masterId, String.format("%.1f", this.railProgress));
         CouplingManager.turnBackCouplingChain(data, selfServer, serverLevel, Main.COUPLING_SYNC_S2C_PACKET_ID, reposition);
+        LOGGER.info("[TurnBack] after turnback: masterId={} railProgress={}",
+                this.manualEnchance$masterId, String.format("%.1f", this.railProgress));
         // Manual turnback: flip reversed on the new master (chain last element).
         // Auto turnback: MTR handles reversed via its own terminal detection.
         if (force && !chain.isEmpty()) {
@@ -1110,7 +1217,7 @@ public abstract class TrainMixin implements TrainAccessor {
         forward = forward.scale(1.0 / len);
 
         double dot = targetCenter.subtract(selfCenter).dot(forward);
-        // dot > 0 → target is ahead of self → self is behind
+        // dot > 0 ↁEtarget is ahead of self ↁEself is behind
         return dot > 0;
     }
 
@@ -1151,45 +1258,40 @@ public abstract class TrainMixin implements TrainAccessor {
     private void redirectRailProgressPut(Train instance, double newValue) {
         if (this.manualEnchance$masterId != 0L) {
             if (this.manualEnchance$cachedWorld != null && this.manualEnchance$cachedWorld.isClientSide()) {
-                // Client: the server-synced railProgress (from the packet received before
-                // simulateTrain) is already correct. MTR's simulation doesn't know about
-                // coupling and would overwrite it with wrong values. By returning without
-                // writing, we keep the packet value. Note: we CANNOT use nextManualProgress
-                // here because it is set in forceFinalSpeed (TAIL) which runs AFTER this
-                // redirect — it would always be one tick behind.
                 this.lastFixedProgress = this.railProgress;
                 return;
             }
-            // Server: forceFinalSpeed (TAIL) sets nextManualProgress from golden rule (master - offset).
-            // Use that value (it runs after this redirect in the same tick).
+            LOGGER.debug("[RP] slave id={} masterId={} using nextManualProgress={} (MTR wanted {})",
+                    instance.id, this.manualEnchance$masterId, this.nextManualProgress, newValue);
             this.railProgress = this.nextManualProgress;
             this.lastFixedProgress = this.nextManualProgress;
             return;
         }
         if (!this.isCurrentlyManual || (this.isInsideDepot && !this.hasLeftDepot)) {
-            // When coupleStopActive, clamp railProgress to the coupled stop target so the train
-            // stops bumper-to-bumper behind the master instead of coasting to its natural platform.
             if (manualEnchance$coupleStopActive && newValue > manualEnchance$coupleStopTarget) {
                 newValue = manualEnchance$coupleStopTarget;
+            }
+            if (Math.abs(newValue - this.railProgress) > 100.0) {
+                LOGGER.debug("[RP] MTR turnback JUMP id={} old={} new={}", instance.id, String.format("%.1f", this.railProgress), String.format("%.1f", newValue));
             }
             this.railProgress = newValue;
             this.lastFixedProgress = newValue;
             return;
         }
-        this.railProgress = this.nextManualProgress;
-        this.lastFixedProgress = this.nextManualProgress;
+        if (Math.abs(newValue - this.railProgress) > 100.0) {
+            LOGGER.debug("[RP] turnback JUMP (manual) id={} old={} new={} masterId={}",
+                    instance.id, String.format("%.1f", this.railProgress), String.format("%.1f", newValue), this.manualEnchance$masterId);
+            this.railProgress = newValue;
+            this.lastFixedProgress = newValue;
+            this.nextManualProgress = newValue;
+        } else {
+            this.railProgress = this.nextManualProgress;
+            this.lastFixedProgress = this.nextManualProgress;
+        }
     }
 
     @Inject(method = "simulateTrain", at = @At("TAIL"))
     private void forceFinalSpeed(Level world, float ticksElapsed, Depot depot, CallbackInfo ci) {
-        // Track isOnRoute false→true transitions for non-slave trains (before the else-if chain
-        // so it runs even when the slave branch or manual branch is entered).
-        if (this.manualEnchance$masterId == 0L) {
-            if (!this.isOnRoute) {
-                this.manualEnchance$wasOffRoute = true;
-            }
-        }
-
         if (this.manualEnchance$masterId != 0L) {
             if (!(world instanceof ServerLevel)) return;
 
@@ -1201,7 +1303,7 @@ public abstract class TrainMixin implements TrainAccessor {
             }
 
             if (frontTrain == null) {
-                // ★ マスター消失 → 自動連結解除
+                // ☁Eマスター消失 ↁE自動連結解除
                 LOGGER.warn("[forceFinalSpeed] master {} not found for slave {}, auto-uncoupling",
                         this.manualEnchance$masterId, self.id);
                 if (world instanceof ServerLevel serverLevel) {
@@ -1215,10 +1317,14 @@ public abstract class TrainMixin implements TrainAccessor {
 
             TrainAccessor frontAcc = (TrainAccessor) frontTrain;
 
-            // ★ Golden rule: slave.railProgress = master.railProgress - couplingOffset
+            // ☁EGolden rule: slave.railProgress = master.railProgress - couplingOffset
             // The offset is set at coupling (actual diff) and at turnback (per spec).
             // This guarantees monotonic railProgress since master.railProgress only increases (reverser=1).
             double targetProgress = frontTrain.getRailProgress() - this.manualEnchance$couplingOffset;
+            LOGGER.debug("[FS] slave {}: masterRP={} offset={} rawTarget={}",
+                    self.id, String.format("%.1f", frontTrain.getRailProgress()),
+                    String.format("%.1f", this.manualEnchance$couplingOffset),
+                    String.format("%.1f", targetProgress));
             // Safety: clamp to valid path range to prevent depot teleport
             double slaveMaxP = (this.distances != null && !this.distances.isEmpty())
                     ? this.distances.get(this.distances.size() - 1) : Double.MAX_VALUE;
@@ -1227,8 +1333,10 @@ public abstract class TrainMixin implements TrainAccessor {
                 if (targetProgress < slaveMinP) targetProgress = slaveMinP;
                 if (targetProgress > slaveMaxP) targetProgress = slaveMaxP;
             }
+            LOGGER.debug("[FS] slave {}: clampedTarget={} minP={} maxP={}",
+                    self.id, String.format("%.1f", targetProgress), String.format("%.1f", slaveMinP), String.format("%.1f", slaveMaxP));
 
-            // ★ Set railProgress FIRST so getCouplerDistance uses corrected position
+            // ☁ESet railProgress FIRST so getCouplerDistance uses corrected position
             this.nextManualProgress = targetProgress;
             this.nextManualSpeed = frontTrain.getSpeed();
             this.reversed = frontTrain.isReversed();
@@ -1237,35 +1345,11 @@ public abstract class TrainMixin implements TrainAccessor {
             this.railProgress = this.nextManualProgress;
             this.lastFixedProgress = this.nextManualProgress;
 
-            // Recalculate offset when master reverses at turnback. After MTR reverses the
-            // master, the physical arrangement changes and the old offset produces wrong
-            // slave positions. Using the actual railProgress difference captures the new
-            // arrangement correctly (works for both same-route and cross-route).
-            // Skip on the exact tick that turnBackCouplingChain ran (turnBackDone) to avoid
-            // overwriting the offset that was just correctly set by the turnback.
-            if (frontTrain.isReversed() != this.manualEnchance$lastReversed && !this.manualEnchance$turnBackDone) {
-                double newOffset = frontTrain.getRailProgress() - this.railProgress;
-                this.manualEnchance$couplingOffset = newOffset;
-                java.util.Map<Long, CouplingInfo> cmap = CouplingManager.getCouplingMap();
-                CouplingInfo oldInfo = cmap.get(self.id);
-                if (oldInfo != null) {
-                    cmap.put(self.id, new CouplingInfo(oldInfo.masterId, newOffset, oldInfo.type));
-                }
-                if (world instanceof ServerLevel serverLevel) {
-                    FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-                    buf.writeLong(self.id);
-                    buf.writeLong(this.manualEnchance$masterId);
-                    buf.writeDouble(newOffset);
-                    buf.writeInt(oldInfo != null ? oldInfo.type.ordinal() : 0);
-                    CouplingManager.broadcast(serverLevel, Main.COUPLING_SYNC_S2C_PACKET_ID, buf);
-                }
-                LOGGER.info("[forceFinalSpeed] slave {} offset recalculated: {} → {} (master reversed)",
-                        self.id, String.format("%.2f", oldInfo != null ? oldInfo.offset : 0),
-                        String.format("%.2f", newOffset));
-            }
-            this.manualEnchance$lastReversed = frontTrain.isReversed();
+            LOGGER.debug("[FS] slave {}: FINAL railProgress={} speed={}", self.id, String.format("%.1f", this.railProgress), this.speed);
 
-            // ★ 3D距離チェック（今は railProgress が既に補正済み）
+            // Turnback offset recalculation is now handled in turnBackCouplingChain.
+
+            // ☁E3D距離チェック E�今�E railProgress が既に補正済み E
             CouplingInfo info = CouplingManager.getCouplingMap().get(self.id);
             if (info == null) {
                 LOGGER.warn("[forceFinalSpeed] slave {} has no CouplingInfo but has masterId={}, auto-uncoupling",
@@ -1291,8 +1375,9 @@ public abstract class TrainMixin implements TrainAccessor {
                 return;
             }
 
-            // ★ Bidirectional door sync: capture slave's door state BEFORE overwriting.
+            // ☁EBidirectional door sync: capture slave's door state BEFORE overwriting.
             // If the user clicked the door on the slave, slave's value differs from master's.
+            // Only sync doors when train is STOPPED (speed == 0) to prevent "doors opening while moving".
             boolean slaveDoorTarget = this.doorTarget;
             float slaveDoorValue = this.doorValue;
 
@@ -1300,9 +1385,9 @@ public abstract class TrainMixin implements TrainAccessor {
             this.doorTarget = frontAcc.manualEnchance$getDoorTarget();
 
             // If slave had a different door state, the user acted on the slave.
-            // Push back to master and sync across the entire chain.
-            if (slaveDoorTarget != this.doorTarget
-                    || Math.abs(slaveDoorValue - this.doorValue) > 0.01f) {
+            // Push back to master and sync across the entire chain  Ebut ONLY when stopped.
+            if (this.speed <= 0.001F && (slaveDoorTarget != this.doorTarget
+                    || Math.abs(slaveDoorValue - this.doorValue) > 0.01f)) {
                 frontAcc.manualEnchance$setDoorTarget(slaveDoorTarget);
                 frontAcc.setDoorValue(slaveDoorValue);
                 if (world instanceof ServerLevel serverLevel) {
@@ -1335,44 +1420,38 @@ public abstract class TrainMixin implements TrainAccessor {
             // Auto non-slave: MTR controls speed/progress directly. Nothing to override.
         }
 
-        // AUTO TURNBACK DETECTION — runs for ALL non-slave trains regardless of isCurrentlyManual.
-        // After a terminal reset, MTR temporarily sets isCurrentlyManual=true (cooldown), which
-        // means the auto branch above is not entered. Moving turnback detection here ensures it
-        // fires even during that cooldown window.
+        // AUTO TURNBACK DETECTION
         if (this.manualEnchance$masterId == 0L && world instanceof ServerLevel serverLevel && this.isOnRoute) {
             Train self = (Train)(Object)this;
 
-            // wasOffRoute is set at the top of forceFinalSpeed (before the else-if chain) when
-            // isOnRoute is false. When isOnRoute transitions back to true, this IS the turnback
-            // moment for non-repeat routes where MTR never toggles `reversed`.
-            boolean isOnRouteResumed = this.manualEnchance$wasOffRoute;
-            if (isOnRouteResumed) {
-                this.manualEnchance$wasOffRoute = false;
-            }
-
             boolean reversedChanged = this.reversed != this.manualEnchance$lastReversed;
-            // Fallback: detect terminal arrival by path position (nextStoppingIndex near end).
-            boolean atTerminal = self.path != null && !self.path.isEmpty()
-                    && this.nextStoppingIndex >= self.path.size() - 2
-                    && this.speed < 0.1F && this.elapsedDwellTicks > 20;
+            boolean hasSlaves = manualEnchance$chainHasSlaves(self.id);
+
+            LOGGER.debug("[FS] auto turnback check id={} reversed={} lastReversed={} reversedChanged={} isRepeat={} hasSlaves={} turnBackDone={} pathEmpty={}",
+                    self.id, this.reversed, this.manualEnchance$lastReversed, reversedChanged,
+                    isRepeat(), hasSlaves, this.manualEnchance$turnBackDone,
+                    self.path == null || self.path.isEmpty());
 
             // Reset turnBackDone when train leaves terminal so turnback can fire again on return.
-            if (this.manualEnchance$turnBackDone && !atTerminal && !reversedChanged && !isOnRouteResumed) {
+            if (this.manualEnchance$turnBackDone && !reversedChanged) {
                 this.manualEnchance$turnBackDone = false;
+                LOGGER.debug("[FS] reset turnBackDone for id={}", self.id);
             }
 
-            if ((reversedChanged || atTerminal || isOnRouteResumed)
-                    && manualEnchance$chainHasSlaves(self.id)
+            if (reversedChanged
+                    && isRepeat()
+                    && hasSlaves
                     && self.path != null && !self.path.isEmpty()
                     && self instanceof TrainServer selfServer
                     && !this.manualEnchance$turnBackDone) {
                 RailwayData data = RailwayData.getInstance(serverLevel);
                 if (data != null) {
-                    LOGGER.info("[forceFinalSpeed] auto turnback detected for master={}, reversedChanged={}, atTerminal={}, isOnRouteResumed={}, swapping roles",
-                            self.id, reversedChanged, atTerminal, isOnRouteResumed);
+                    LOGGER.info("[FS] AUTO TURNBACK FIRING for master={}, isRepeat={}",
+                            self.id, isRepeat());
                     java.util.List<Long> chain = new java.util.ArrayList<>();
                     chain.add(self.id);
                     manualEnchance$collectSlaves(self.id, chain);
+                    LOGGER.info("[FS] auto turnback chain={}", chain);
                     CouplingManager.turnBackCouplingChain(data, selfServer, serverLevel,
                             Main.COUPLING_SYNC_S2C_PACKET_ID, false);
                     for (Long id : chain) {

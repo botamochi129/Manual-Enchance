@@ -1,7 +1,7 @@
 package botamochi129.manual_enchance;
 
 import botamochi129.manual_enchance.util.*;
-import dev.architectury.event.events.common.LifecycleEvent;
+		import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.event.events.common.TickEvent;
 import dev.architectury.networking.NetworkManager;
@@ -153,8 +153,8 @@ public class Main {
 			context.queue(() -> {
 				LOGGER.info("[Coupling] attempt_coupling received for trainId={}", trainId);
              #if MC_VERSION >= "12000"
-             	RailwayData data = RailwayData.getInstance(context.getPlayer().level());
-				ServerLevel serverLevel = (ServerLevel) context.getPlayer().level();
+                RailwayData data = RailwayData.getInstance(context.getPlayer().level());
+                                ServerLevel serverLevel = (ServerLevel) context.getPlayer().level();
              #else
 				RailwayData data = RailwayData.getInstance(context.getPlayer().level);
 				ServerLevel serverLevel = (ServerLevel) context.getPlayer().level;
@@ -250,28 +250,15 @@ public class Main {
 				}
 
 				// Multi-segment check: the new slave must be free (not already coupled).
+				// A train can only be a slave to one master, so we reject if it's already a slave.
 				if (((TrainAccessor) slave).manualEnchance$getMasterId() != 0L) {
 					LOGGER.info("[Coupling] slave {} already has masterId={}, cannot branch", slave.id, ((TrainAccessor) slave).manualEnchance$getMasterId());
 					context.getPlayer().displayClientMessage(Text.literal("§c[Coupling] §fこの列車は既に連結中です"), true);
 					return;
 				}
-				// Multi-segment check: the proposed master must not already have a direct slave
-				// in the coupling map (one master = one slave, prevents branching).
-				{
-					long masterCandidateId = master.id;
-					boolean alreadyHasSlave = false;
-					for (Map.Entry<Long, CouplingInfo> entry : CouplingManager.getCouplingMap().entrySet()) {
-						if (entry.getValue().masterId == masterCandidateId) {
-							alreadyHasSlave = true;
-							break;
-						}
-					}
-					if (alreadyHasSlave) {
-						LOGGER.info("[Coupling] master {} already has a direct slave, cannot branch", masterCandidateId);
-						context.getPlayer().displayClientMessage(Text.literal("§c[Coupling] §fこの列車には既に連結された編成があります"), true);
-						return;
-					}
-				}
+				// ALLOW multi-segment chains: the master CAN already have a slave.
+				// This enables chains like A→B→C where B is slave of A and C is slave of B.
+				// We only need to ensure we're not creating a loop (checked by wouldCreateLoop above).
 
 				LOGGER.info("[Coupling] attempting applyNaturalCoupling: slave={}, master={}, type={}", slave.id, master.id, applyType);
 				if (CouplingManager.applyNaturalCoupling(slave, master, applyType, serverLevel, COUPLING_SYNC_S2C_PACKET_ID)) {
@@ -289,13 +276,13 @@ public class Main {
 		NetworkManager.registerReceiver(NetworkManager.Side.C2S, UNCOUPLE_PACKET_ID, (buf, context) -> {
 			long trainId = buf.readLong();
 			context.queue(() -> {
-				#if MC_VERSION >= "12000"
-					ServerLevel serverLevel = (ServerLevel) context.getPlayer().level();
-					RailwayData data = RailwayData.getInstance(context.getPlayer().level());
-				 #else
-					ServerLevel serverLevel = (ServerLevel) context.getPlayer().level;
-					RailwayData data = RailwayData.getInstance(context.getPlayer().level);
-				 #endif
+                                #if MC_VERSION >= "12000"
+                                        ServerLevel serverLevel = (ServerLevel) context.getPlayer().level();
+                                        RailwayData data = RailwayData.getInstance(context.getPlayer().level());
+                                 #else
+				ServerLevel serverLevel = (ServerLevel) context.getPlayer().level;
+				RailwayData data = RailwayData.getInstance(context.getPlayer().level);
+                                 #endif
 				TrainServer train = CouplingManager.findTrain(data, trainId);
 				if (train != null && Math.abs(train.getSpeed()) > 0.05F) {
 					context.getPlayer().displayClientMessage(Text.literal("§c[Coupling] §f停止してから解結してください"), true);
@@ -342,11 +329,11 @@ public class Main {
 			long masterSidingId = buf.readLong();
 			context.queue(() -> {
 				SidingDataManager.setMasterSidingId(slaveSidingId, masterSidingId);
-				#if MC_VERSION >= "12000"
-				ServerLevel level = ((ServerPlayer) context.getPlayer()).serverLevel();
-				#else
+                                #if MC_VERSION >= "12000"
+                                ServerLevel level = ((ServerPlayer) context.getPlayer()).serverLevel();
+                                #else
 				ServerLevel level = ((ServerPlayer) context.getPlayer()).getLevel();
-				#endif
+                                #endif
 				SidingDataManager.save(level);
 
 				FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
@@ -373,11 +360,11 @@ public class Main {
 				actions.add(new RouteCouplingStore.RouteCouplingAction(routeId, stationIndex, doCouple, doUncouple, targetSidingId, waitForever, splitTrainIndex));
 			}
 			context.queue(() -> {
-				#if MC_VERSION >= "12000"
-				ServerLevel level = ((ServerPlayer) context.getPlayer()).serverLevel();
-				#else
+                                #if MC_VERSION >= "12000"
+                                ServerLevel level = ((ServerPlayer) context.getPlayer()).serverLevel();
+                                #else
 				ServerLevel level = ((ServerPlayer) context.getPlayer()).getLevel();
-				#endif
+                                #endif
 				System.out.println("[ManualEnchance] processing ROUTE_COUPLING_UPDATE_PACKET on server thread: " + actions.size() + " actions");
 				for (RouteCouplingStore.RouteCouplingAction a : actions) {
 					RouteCouplingStore.setAction(a);
